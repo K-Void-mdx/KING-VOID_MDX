@@ -1,21 +1,21 @@
 {
-  "name": "zee-bot-v2",
-  "version": "2.8.8.4",
-  "description": "ZEE BOT V2 — Powered by CRYSNOVA AI V2 Technology",
+  "name": "king-void-mdx",
+  "version": "3.0.0",
+  "description": "A modular WhatsApp bot focused on AI, automation, moderation, utilities and customization.",
   "main": "index.js",
   "type": "commonjs",
   "scripts": {
-    "start": "node main.js",
-    "dev": "nodemon main.js"
+    "start": "node index.js",
+    "dev": "nodemon index.js"
   },
   "keywords": [
     "whatsapp",
     "bot",
     "baileys",
-    "crysnova",
-    "zee-bot"
+    "king-void",
+    "automation"
   ],
-  "author": "𝓬𝓻𝔂𝓼𝓷𝓸𝓿𝓪𝔁 𝓿𝓮𝓻𝓲𝓯𝓲𝓮𝓭‎",
+  "author": "King Val 👑",
   "license": "MIT",
   "dependencies": {
     "@adiwajshing/keyed-db": "^0.2.4",

@@ -1,4 +1,4 @@
-// © 2026 ZEE BOT | Powered by CRYSNOVA AI V2 Technology
+// © 2026 King Void MDX | Built by King Val 👑
 // Config reads from .env (primary) → getVar runtime (secondary) → defaults
 //
 
@@ -42,7 +42,7 @@ const getSessionNumber = () => {
     return null;
 };
 
-const defaultNumber = process.env.OWNER_NUMBER || '2347043550282';
+const defaultNumber = process.env.OWNER_NUMBER || '2347046855205';
 
 const resolvedOwner =
     process.env.OWNER_NUMBER        ||
@@ -53,13 +53,13 @@ const resolvedOwner =
 
 /*
 ──────────────────────────────────────────
-Config (ZEE BOT structure + CRYSNOVA V2 fields)
+Config (KING VOID_MDX structure)
 ──────────────────────────────────────────
 */
 const config = {
 
     // ════════════════════════════════════════════
-    // BOT IDENTITY (ZEE BOT .env style)
+    // BOT IDENTITY
     // ════════════════════════════════════════════
     owner: resolvedOwner,
 
@@ -80,10 +80,10 @@ const config = {
         process.env.THUMB_URL        ||
         getVar('THUMB_URL')          ||
         userConfig?.thumbUrl         ||
-        'https://cdn.crysnovax.link/files/1778529162616-eca99707-7b11-453a-802a-e85a9d1c2395.jpeg',
+        'https://files.catbox.moe/z2rqc1.jpg',
 
     // ════════════════════════════════════════════
-    // PANEL CONNECTOR API (CODY)
+    // PANEL CONNECTOR API
     // ════════════════════════════════════════════
     panelApiPort:
         process.env.PANEL_API_PORT   ||
@@ -98,7 +98,7 @@ const config = {
         process.cwd(),
 
     // ════════════════════════════════════════════
-    // BOT STATUS / MODE (ZEE BOT .env style)
+    // BOT STATUS / MODE
     // ════════════════════════════════════════════
     status: {
         public:   process.env.PUBLIC_MODE   !== undefined ? process.env.PUBLIC_MODE   === 'false'  : (getVar('PUBLIC_MODE')   ?? userConfig?.bot?.public   ?? true),
@@ -107,7 +107,7 @@ const config = {
     },
 
     // ════════════════════════════════════════════
-    // BOT MODE FLAGS (ZEE BOT specific)
+    // BOT MODE FLAGS
     // ════════════════════════════════════════════
     mode: {
         autoRead:      process.env.AUTO_READ      !== 'false',
@@ -118,20 +118,20 @@ const config = {
     },
 
     // ════════════════════════════════════════════
-    // SETTINGS (CRYSNOVA V2 style with .env)
+    // SETTINGS
     // ════════════════════════════════════════════
     settings: {
         title:
             process.env.BOT_NAME         ||
             getVar('BOT_NAME')           ||
             userConfig?.bot?.name        ||
-            'CRYSNOVA AI',
+            'KING VOID_MDX',
 
         packname:
             process.env.BOT_NAME         ||
             getVar('BOT_NAME')           ||
             userConfig?.bot?.name        ||
-            'CRYSNOVA AI',
+            'KING VOID_MDX',
 
         prefix: (() => {
             const envPrefix = process.env.PREFIX;
@@ -152,9 +152,9 @@ const config = {
             return '.';
         })(),
 
-        description: 'Professional WhatsApp Bot — ZEE BOT powered by CRYSNOVA AI V2',
-        author:      'https://github.com/crysnovax/CRYSNOVA_AI',
-        footer:      '© ZEE BOT | Powered by CRYSNOVA AI',
+        description: 'A modular WhatsApp bot focused on AI, automation, moderation, utilities and customization.',
+        author:      'https://github.com/K-Void-mdx/KING-VOID_MDX',
+        footer:      '© King Void MDX',
 
         ownerJid:
             getVar('OWNER_JID')          ||
@@ -165,11 +165,11 @@ const config = {
             process.env.OWNER_NAME       ||
             getVar('OWNER_NAME')         ||
             userConfig?.owner?.name      ||
-            'ZEE OWNER'
+            'King Val 👑'
     },
 
     // ════════════════════════════════════════════
-    // PERMISSIONS (ZEE BOT .env style)
+    // PERMISSIONS
     // ════════════════════════════════════════════
     permissions: {
         owners: process.env.OWNER_NUMBERS
@@ -180,7 +180,7 @@ const config = {
     },
 
     // ════════════════════════════════════════════
-    // MESSAGES (CRYSNOVA V2 style)
+    // MESSAGES
     // ════════════════════════════════════════════
     message: {
         owner:   '`ⓘ OWNER ONLY 彡`',
@@ -197,7 +197,7 @@ const config = {
     },
 
     // ════════════════════════════════════════════
-    // AUTO REPLY (ZEE BOT feature)
+    // AUTO REPLY
     // ════════════════════════════════════════════
     autoReply: {
         enabled: process.env.AUTO_REPLY !== 'false',
@@ -210,23 +210,23 @@ const config = {
         greetings: {
             enabled:  true,
             keywords: ['hi', 'hello', 'hey', 'morning', 'afternoon', 'evening'],
-            response: 'Hello! 👋 How can ZEE BOT help you today?'
+            response: 'Hello! 👋 How can KING VOID_MDX help you today?'
         }
     },
 
     // ════════════════════════════════════════════
-    // NEWSLETTER (CRYSNOVA V2 style)
+    // NEWSLETTER
     // ════════════════════════════════════════════
     newsletter: {
         name:
             process.env.BOT_NAME ||
             getVar('BOT_NAME')   ||
-            'CRYSNOVA AI',
+            'KING VOID_MDX',
         id: '120363402922206865@newsletter'
     },
 
     // ════════════════════════════════════════════
-    // API KEYS (ZEE BOT .env style)
+    // API KEYS
     // ════════════════════════════════════════════
     api: {
         baseurl:
@@ -274,31 +274,31 @@ const config = {
     },
 
     // ════════════════════════════════════════════
-    // STICKER (CRYSNOVA V2 style)
+    // STICKER
     // ════════════════════════════════════════════
     sticker: {
         packname:
             process.env.BOT_NAME         ||
             getVar('BOT_NAME')           ||
-            'CRYSNOVA AI',
+            'KING VOID_MDX',
         author:
             process.env.STICKER_AUTHOR   ||
             getVar('STICKER_AUTHOR')     ||
-            'crysnovax'
+            'King Val'
     },
 
     // ════════════════════════════════════════════
-    // BRANDING (ZEE BOT style)
+    // BRANDING
     // ════════════════════════════════════════════
     branding: {
-        footer:  '© ZEE BOT | Powered by CRYSNOVA AI',
-        channel: 'https://whatsapp.com/channel/0029Vb6pe77K0IBn48HLKb38',
-        group:   process.env.GROUP_LINK || 'https://chat.whatsapp.com/Besbj8VIle1GwxKKZv1lax?mode=gi_t',
-        repo:    'https://github.com/crysnovax/CRYSNOVA_AI'
+        footer:  '© King Void MDX',
+        channel: 'https://whatsapp.com/channel/0029VbC9Hv323n3dksPzCd0c',
+        group:   process.env.GROUP_LINK || 'https://chat.whatsapp.com/KTXT1NwXaMTHzJgICx7tlV?s=cl&p=a&mlu=3',
+        repo:    'https://github.com/K-Void-mdx/KING-VOID_MDX'
     },
 
     // ════════════════════════════════════════════
-    // LOGGING (ZEE BOT style)
+    // LOGGING
     // ════════════════════════════════════════════
     logging: {
         level:       process.env.LOG_LEVEL || 'silent',
@@ -307,7 +307,7 @@ const config = {
     },
 
     // ════════════════════════════════════════════
-    // STATUS HANDLER SETTINGS (CRYSNOVA V2)
+    // STATUS HANDLER SETTINGS
     // ════════════════════════════════════════════
     statusHandler: {
         autoView:

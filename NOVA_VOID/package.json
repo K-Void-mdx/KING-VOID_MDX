@@ -1,0 +1,19 @@
+{
+  "name": "nova-void-mdx",
+  "version": "0.1.0",
+  "private": true,
+  "description": "NOVA_VOID MDX — a clean, modular WhatsApp bot rebuild.",
+  "type": "module",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "check": "node --check src/index.js && node --check src/config/env.js && node --check src/core/commands/registry.js && node --check src/core/message/trigger.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@whiskeysockets/baileys": "7.0.0-rc13",
+    "pino": "^10.0.0"
+  }
+}

@@ -1,4 +1,4 @@
-export function normalizeMessage(raw = {}) {
+export function normalizeMessage(raw = {}, { botJid = '' } = {}) {
   const message = raw.message ?? raw;
   const key = raw.key ?? message.key ?? {};
   const context = message.extendedTextMessage?.contextInfo ?? message.contextInfo ?? {};
@@ -6,17 +6,21 @@ export function normalizeMessage(raw = {}) {
   const mentionedJids = [
     ...(context.mentionedJid ?? []),
     ...(context.mentionedJids ?? []),
+    ...(raw.mentionedJids ?? []),
   ].filter(Boolean);
 
   return {
     id: key.id ?? raw.id ?? null,
     chatJid: key.remoteJid ?? raw.chatJid ?? null,
-    sender: key.participant ?? raw.sender ?? key.remoteJid ?? null,
+    senderJid: key.participant ?? raw.senderJid ?? raw.sender ?? key.remoteJid ?? null,
     fromMe: Boolean(key.fromMe ?? raw.fromMe),
     text: extractText(message),
     mentionedJids,
-    quotedParticipant: context.participant ?? null,
-    quotedMessageId: context.stanzaId ?? null,
+    quotedParticipant: context.participant ?? raw.quotedParticipant ?? null,
+    quotedMessageId: context.stanzaId ?? raw.quotedMessageId ?? null,
+    isGroup: String(key.remoteJid ?? raw.chatJid ?? '').endsWith('@g.us'),
+    isFromBot: Boolean(key.fromMe ?? raw.fromMe),
+    botJid,
     raw,
   };
 }

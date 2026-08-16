@@ -1,0 +1,21 @@
+import { NovaApplication } from './application.js';
+import { AIRouter } from '../ai/router.js';
+import { AIService } from '../ai/ai-service.js';
+import { AISessionStore } from '../ai/session-store.js';
+import { AIMemoryStore } from '../ai/memory-store.js';
+import { createPermissionChecker } from './permissions/check.js';
+import { createAICommands } from '../commands/ai.js';
+import { createChatbotCommand } from '../commands/chatbot.js';
+
+export function createNovaApplication({ botJid, ownerJids = [], sudoJids = [], reply }) {
+  const sessions = new AISessionStore();
+  const memory = new AIMemoryStore();
+  const router = new AIRouter();
+  const ai = new AIService({ router, sessions, memory });
+  const permissions = createPermissionChecker({ ownerJids, sudoJids });
+  const app = new NovaApplication({ botJid, ownerJids, sudoJids, ai, sessions, memory, reply });
+
+  app.register(createAICommands({ ai, sessions, memory, permissions }));
+  app.register(createChatbotCommand({ state: app.chatbot, permissions }));
+  return { app, router, sessions, memory, ai };
+}

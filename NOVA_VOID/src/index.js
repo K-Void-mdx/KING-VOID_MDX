@@ -25,6 +25,10 @@ export async function startNovaVoid() {
         botJid,
         ownerJids,
         reply: (chatJid, text) => sock.sendMessage(chatJid, { text }),
+        sendMedia: (chatJid, media) => {
+          if (media.type !== 'image' || !media.buffer) throw new Error('Unsupported media payload');
+          return sock.sendMessage(chatJid, { image: media.buffer, caption: media.caption ?? '' });
+        },
       });
       logger.info({ botJid }, `${env.botName} connected`);
     }

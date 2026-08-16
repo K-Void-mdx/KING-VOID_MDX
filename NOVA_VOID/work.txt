@@ -1,427 +1,1559 @@
-NOVA_VOID MDX — MASTER WORK BRIEF
-=================================
+# NOVA_VOID MDX — MASTER PROJECT / CONTINUATION BRIEF
 
-PURPOSE
--------
-This file is the master handoff/context document for any coding AI working on NOVA_VOID MDX. Read it before changing the project. It summarizes the user's requirements, the audit conclusions, the architecture decisions, and the work order agreed in the conversation.
+> **This document is the handoff and source-of-truth document for NOVA_VOID MDX.**
+> Any coding AI, developer, or future version of the project should read this file before making architectural changes.
 
-USER'S GOAL
------------
-Build a personal WhatsApp bot called NOVA_VOID MDX that is clean, reliable, maintainable, Termux-friendly, and eventually good enough to package/sell for profit. The user does not have a PC and previously tried using OpenCode Zen in Termux, but abandoned it because it was not performing well enough. GitHub is the primary project workspace.
+---
 
-IMPORTANT WORK STYLE
---------------------
-- Do not waste the user's data/chat limit with unnecessary explanations or repeated questions.
-- Work directly on the GitHub rebuild branch when the requested change is safe and clear.
-- Do not destroy the old repositories or their main branches; they are references/history.
-- Prefer compact progress updates after batches of work.
-- Inspect existing code before porting it. Do not blindly copy the old bot.
-- Keep secrets/API keys out of Git.
-- Validate changes with tests/static checks where possible.
-- Do not claim a feature is finished unless the implementation actually exists and has been checked.
+# 1. PROJECT IDENTITY
 
-SOURCE REPOSITORIES
--------------------
-1. K-Void-mdx/King-Void-MDX
-   - Older Levanter-based bot.
-   - Large, established framework-style codebase.
-   - Useful as a reference for existing functionality and architecture ideas.
-   - Core is very large/monolithic and includes difficult-to-maintain/obfuscated code.
-   - Do NOT use it as the direct production foundation.
+**Project name:** NOVA_VOID MDX
 
-2. K-Void-mdx/KING-VOID_MDX
-   - Crysnova/Baileys-based newer bot.
-   - Contains a much richer modular command tree and more of the user's intended feature set.
-   - This is the primary reference/source repository for NOVA_VOID.
-   - Existing main branch must remain preserved.
+**Repository:** `K-Void-mdx/KING-VOID_MDX`
 
-NEW PROJECT
------------
-Name: NOVA_VOID MDX
-Rebuild branch: nova-void-rebuild
+**Primary branch:** `main`
 
-Do not immediately delete/rename the old repository. Build the clean rebuild first, then decide how the final repository/branding migration should happen.
+**Development branch:** `nova-void-rebuild` (historical development branch; future work may use new feature branches)
 
-CORE PRODUCT DECISIONS
-----------------------
-- Use KING-VOID_MDX as the main feature/reference source.
-- Use Levanter only as reference material where useful.
-- Do not simply rename Crysnova and ship it.
-- Build a clean, modular core.
-- Reduce dependencies aggressively.
-- Use one WhatsApp/Baileys implementation in the new core, not the multiple competing Baileys packages present in the old project.
-- Do not carry over the old giant/obfuscated core.
-- Do not carry over the old updater design that can overwrite files unpredictably.
-- Do not carry over hard-coded API credentials.
-- Audit third-party licenses before commercial distribution.
+**Platform:** WhatsApp bot
 
-AI SYSTEM — USER REQUIREMENTS
------------------------------
-The AI should be intentionally SMALL and useful, not a huge collection of AI commands.
+**Primary development environment:** Android phone + Termux
 
-Required AI features:
+**User constraint:** The user does not have a PC and wants to minimize mobile-data usage.
 
-1. .chatbot on/off
-   - When ON, NOVA_VOID replies only when directly mentioned/tagged OR when the incoming WhatsApp message is a reply/swipe/reply-to a message sent by NOVA_VOID.
-   - Example mention:
-       Member: @NOVA_VOID hey hi
-       NOVA_VOID: Hey there 👋 How can I help you?
-   - Example reply:
-       Member replies to NOVA_VOID's previous message: what do you mean?
-       NOVA_VOID replies using AI.
-   - Ordinary group conversation must NOT trigger the AI.
-   - Trigger detection must use actual WhatsApp/Baileys message context/metadata, not a naive text-only @ check.
-   - Respect group/private settings and permissions.
+**Long-term goal:** Build a clean, reliable, maintainable WhatsApp bot that can eventually be packaged and sold for profit.
 
-2. .train
-   - Owner-controlled persistent bot knowledge/personality/memory.
-   - This is NOT model fine-tuning.
-   - Training data should be stored separately from temporary conversation history.
-   - Owner can add/update/remove/list training knowledge as the command design evolves.
+---
 
-3. .ai <prompt>
-   - Optional one-off AI request.
-   - Uses the same unified AI provider/router as chatbot mode.
+# 2. THE ORIGINAL REQUEST / WHY THIS PROJECT EXISTS
 
-4. .history
-   - Shows/handles conversation history for the current authorized session.
-   - Owner and approved paired/session users may have access according to permission rules.
-   - Do not expose another user's AI history.
+The user originally had two related WhatsApp bot repositories:
 
-5. .clear-h
-   - Clears the current session's AI conversation history.
-   - Must NOT erase persistent .train knowledge.
+1. `K-Void-mdx/King-Void-MDX`
+2. `K-Void-mdx/KING-VOID_MDX`
 
-6. .clear-h all
-   - Owner-only global history reset.
+They had been using OpenCode Zen through Termux/PRoot/Debian to work on the bot, but the workflow was not good enough, so they abandoned that approach.
 
-7. .generate <prompt>
-   - Image generation is desired, similar in concept to Meta AI/Gemini/ChatGPT image generation.
-   - Video generation is desirable if a suitable provider/API is available later.
-   - Do not promise unlimited free video generation.
-   - Build provider adapters so image/video providers can be added without rewriting the AI core.
+The user wanted the two repositories deeply inspected from beginning to end to determine which was closer to completion and which provided the better foundation.
 
-AI ARCHITECTURE
----------------
-Use one unified AI system rather than separate hard-coded API implementations for each command.
+The conclusion was:
 
-Target structure:
+- **KING-VOID_MDX** is the better primary feature/reference source.
+- **King-Void-MDX / Levanter** is useful as secondary reference material.
+- Neither should simply be renamed and shipped.
+- NOVA_VOID should be a clean rebuild that selectively preserves useful ideas and commands.
 
-ai/
-  provider.js       # provider contract/interface
-  router.js         # choose provider/model and fallback strategy
-  session.js        # conversation sessions/history
-  memory.js         # persistent .train knowledge
-  chatbot.js        # mention/reply trigger behavior
-  generate.js       # image/video generation abstraction
-  prompts.js        # system/personality prompt construction
+The user then chose the name:
 
-Provider credentials belong in environment variables or secret storage only.
-Example placeholders in .env.example are acceptable; real keys must never be committed.
+> **NOVA_VOID MDX**
 
-AI PROVIDER REQUIREMENTS
-------------------------
-- Provider agnostic.
-- Support multiple providers later.
-- Allow a fallback provider if the preferred provider fails or reaches limits.
-- Do not hard-code one gateway.
-- Keep provider-specific response formats behind adapters.
-- Keep AI command code thin.
-- Store only necessary history/context.
-- Provide configurable history limits to avoid excessive token/API usage.
-- Do not send full unrelated group history to an AI provider.
-- Be privacy-conscious with stored conversations.
+The user explicitly requested that the AI system be relatively small and useful rather than a giant collection of complicated AI commands.
 
-COMMAND SYSTEM
---------------
-Target approximately 150–180 useful commands, with an upper preference of about 200.
+The user also requested a command system of approximately **150–180 useful commands**, with an upper preference of about 200, rather than hundreds of confusing or duplicated commands.
 
-The goal is quality and clarity, NOT command-count inflation.
+---
+
+# 3. IMPORTANT USER WORKFLOW REQUIREMENT
+
+The user has limited mobile data and a limited ChatGPT conversation allowance.
+
+Therefore:
+
+- Do not waste data with unnecessary explanations.
+- Do not repeatedly ask questions when the requirement is already clear.
+- Batch work where possible.
+- Work directly on GitHub when safe and appropriate.
+- Give concise milestone updates after meaningful batches.
+- Do not claim something was implemented unless it actually exists in the repository and has been checked.
+- If using another coding AI in Termux later, this document should prevent the user from having to explain the entire project again.
+
+The user's ideal workflow is:
+
+```text
+WORK → CHECK → FIX → CONTINUE → CHECK → FIX → ASK ONLY WHEN NECESSARY
+```
+
+The user wants the coding agent to keep moving rather than repeatedly stopping for tiny questions.
+
+---
+
+# 4. THE TWO ORIGINAL REPOSITORIES
+
+## 4.1 `K-Void-mdx/King-Void-MDX`
+
+This is the older Levanter-based project.
+
+### Useful characteristics
+
+- Established framework-style architecture.
+- Mature/large codebase.
+- Useful historical implementation ideas.
+- Useful reference for existing features.
+
+### Problems
+
+- Very large core.
+- Monolithic areas.
+- Difficult-to-maintain structure.
+- Some obfuscated/difficult code.
+- Not appropriate as the direct clean production foundation.
+
+### Decision
+
+**Reference only.**
+
+Do not blindly copy the architecture.
+
+---
+
+## 4.2 `K-Void-mdx/KING-VOID_MDX`
+
+This is the newer Crysnova/Baileys-based project.
+
+### Useful characteristics
+
+- Much richer modular command tree.
+- More of the features the user actually wants.
+- Useful command/plugin concepts.
+- Existing AI experiments.
+- Existing media/download functionality.
+- Existing owner/admin/sudo concepts.
+- Useful WhatsApp event/message handling ideas.
+
+### Problems
+
+- Dependency bloat.
+- Multiple competing Baileys implementations.
+- Giant configuration.
+- Giant message handling function.
+- Hard-coded/credential-like values existed in old configuration.
+- Old updater design is unsuitable for a commercial product.
+- Some large/obfuscated implementations.
+- Too much functionality is mixed together.
+
+### Decision
+
+**Primary reference/source repository.**
+
+NOVA_VOID should extract useful functionality from it while rebuilding the core cleanly.
+
+---
+
+# 5. PROTECTED HISTORY / BRANCH STRATEGY
+
+The original work was initially developed on:
+
+`nova-void-rebuild`
+
+This protected the old `main` branch while the rebuild was being created.
+
+The user later merged the rebuild into `main` themselves through GitHub Pull Request #1.
+
+Therefore:
+
+> **`main` now contains the NOVA_VOID foundation.**
+
+Future substantial development should preferably happen on a new feature/development branch and then be merged into `main` after checking.
+
+Do not casually destroy the current `main` checkpoint.
+
+---
+
+# 6. CORE PRODUCT VISION
+
+NOVA_VOID MDX should be:
+
+- A WhatsApp bot.
+- Clean and modular.
+- Termux-friendly.
+- Lightweight where practical.
+- Easy to configure.
+- Secure.
+- Reliable.
+- Easy to maintain.
+- Useful for ordinary WhatsApp group/private use.
+- Capable of supporting a small AI assistant.
+- Capable of being extended with plugins/commands.
+- Designed with future commercial distribution in mind.
+
+The bot should **not** become a giant mess just because the old repositories contain many commands.
+
+Quality > quantity.
+
+---
+
+# 7. AI SYSTEM — FINAL USER REQUIREMENTS
+
+The user explicitly wants a relatively small AI system.
+
+The intended AI commands/features are:
+
+1. `.chatbot on/off`
+2. `.train`
+3. `.ai <prompt>`
+4. `.history`
+5. `.clear-h`
+6. `.clear-h all`
+7. `.generate <prompt>`
+
+Additional AI commands should only be added if there is a strong reason.
+
+---
+
+# 8. `.chatbot on/off`
+
+This is the main automatic AI mode.
+
+When chatbot mode is ON, NOVA_VOID should respond when the bot is explicitly addressed.
+
+### Trigger A — direct mention
+
+Example:
+
+```text
+Member: @NOVA_VOID hey hi
+```
+
+Expected behavior:
+
+```text
+NOVA_VOID: Hey there 👋 How can I help you?
+```
+
+### Trigger B — WhatsApp reply/swipe
+
+Example:
+
+```text
+Member replies/swipes to a message sent by NOVA_VOID:
+what did you mean?
+```
+
+Expected behavior:
+
+NOVA_VOID responds using the AI system.
+
+### Non-trigger
+
+Example:
+
+```text
+Member: hey everyone 😂
+```
+
+NOVA_VOID must stay silent.
+
+### Critical implementation requirement
+
+Do NOT detect mentions by simply searching the message text for `@`.
+
+Use actual WhatsApp/Baileys metadata:
+
+- `mentionedJid`
+- quoted/replied message participant
+- bot JID
+- normalized message context
+
+The chatbot should only trigger when:
+
+```text
+DIRECT_MENTION(bot)
+OR
+REPLY_TO_BOT(bot)
+```
+
+---
+
+# 9. `.train`
+
+`.train` is persistent bot knowledge/personality/memory.
+
+It is **not model fine-tuning**.
+
+It should allow the owner to teach NOVA_VOID things such as:
+
+- name
+- creator
+- personality
+- preferred responses
+- facts about the bot
+- custom knowledge
+- instructions
+- project-specific information
+
+Example concept:
+
+```text
+.train add creator My owner is ...
+```
+
+The exact final syntax may be refined later, but the system must support:
+
+- add
+- update
+- list
+- remove
+- persistent storage
+
+Training data is separate from conversation history.
+
+---
+
+# 10. CONVERSATION HISTORY
+
+Conversation history is temporary/session context.
+
+Example:
+
+```text
+User: Who is Elon Musk?
+Bot: ...
+User: How old is he?
+Bot: ...
+```
+
+The second message can use the first message as context.
+
+History must be scoped to an authorized session.
+
+Do not expose one user's AI conversation to another user.
+
+Do not send unrelated group conversation to the AI provider.
+
+History should have configurable limits so it does not grow forever and consume excessive API tokens/storage.
+
+---
+
+# 11. `.history`
+
+`.history` should provide authorized users with access to their current AI session/history.
+
+Possible future behavior:
+
+```text
+.history
+```
+
+returns a compact summary or controlled view.
+
+The command must respect permissions.
+
+Owner and approved paired/session users may have access according to the final permission policy.
+
+---
+
+# 12. `.clear-h`
+
+`.clear-h` clears the current user's/session's conversation history.
+
+It must **not** delete persistent `.train` knowledge.
+
+---
+
+# 13. `.clear-h all`
+
+This is an owner-only operation.
+
+It clears all stored AI conversation histories.
+
+It must not accidentally erase:
+
+- bot configuration
+- training memory
+- user accounts
+- group settings
+
+---
+
+# 14. `.generate`
+
+The user wants image generation similar in concept to Meta AI, Gemini, or ChatGPT image generation.
+
+Example:
+
+```text
+.generate a futuristic black spaceship above Lagos at night
+```
+
+The architecture should support an image-generation provider without coupling the entire bot to one API.
+
+Video generation is desirable later.
+
+Do NOT promise:
+
+- unlimited free generation
+- unlimited free video generation
+- permanent availability of any free API
+
+Provider availability, quotas, pricing, and commercial rights must be checked before selecting a production provider.
+
+---
+
+# 15. AI ARCHITECTURE
+
+The AI system should be unified.
+
+Do NOT create independent hard-coded AI systems for every command.
+
+Target architecture:
+
+```text
+src/ai/
+├── provider.js
+├── router.js
+├── session-store.js
+├── memory.js
+├── chatbot.js
+├── generate.js
+└── prompts.js
+```
+
+Responsibilities:
+
+### `provider.js`
+
+Defines the provider contract and provider-specific error abstraction.
+
+### `router.js`
+
+Selects providers and handles fallback.
+
+### `session-store.js`
+
+Stores temporary conversation sessions.
+
+### `memory.js`
+
+Stores persistent `.train` knowledge.
+
+### `chatbot.js`
+
+Determines whether an incoming message actually triggers chatbot mode.
+
+### `generate.js`
+
+Abstracts image/video generation providers.
+
+### `prompts.js`
+
+Builds system/personality/training prompts.
+
+---
+
+# 16. PROVIDER STRATEGY
+
+The user has mentioned that free API keys may be available later.
+
+The architecture must therefore be provider-neutral.
+
+Rules:
+
+- Never hard-code provider credentials.
+- Never commit API keys.
+- Use environment variables/secrets.
+- Allow multiple providers.
+- Allow fallback.
+- Keep provider-specific request/response formats inside adapters.
+- Keep command code provider-independent.
+- Limit prompt/history size.
+- Do not send unnecessary group data.
+
+Potential providers can be researched later based on current availability, free quotas, latency, model quality, and commercial terms.
+
+Never assume an API is free forever.
+
+---
+
+# 17. COMMAND SYSTEM
+
+The user explicitly requested approximately:
+
+> **150–180 useful commands, maximum around 200.**
+
+The bot should not contain hundreds of duplicated commands.
 
 Suggested categories:
-- AI: ~7–10
-- Owner: ~15
-- Admin: ~20–25
-- Group: ~20
-- Downloader: ~15–20
-- Media: ~10–15
-- Utility: ~15–20
-- Search: ~8–10
-- Fun/Games: ~10–15
-- Converter: ~8–10
-- System/Help: ~10
 
-Every old command must be classified:
-- KEEP — useful and healthy
-- REWRITE — useful but poor implementation
-- MERGE — duplicates another command
-- REMOVE — broken, pointless, unsafe, or unnecessary
-- NEW — required by NOVA_VOID but absent
+| Category | Target |
+|---|---:|
+| AI | 7–10 |
+| Owner | ~15 |
+| Admin | ~20–25 |
+| Group | ~20 |
+| Downloader | ~15–20 |
+| Media | ~10–15 |
+| Utility | ~15–20 |
+| Search | ~8–10 |
+| Fun/Games | ~10–15 |
+| Converter | ~8–10 |
+| System/Help | ~10 |
 
-Do not port commands automatically.
+Final count can vary.
 
-COMMAND ENGINE
---------------
-The old KING-VOID command loader has useful concepts:
-- dynamic command loading
+The important rule is:
+
+> Every command must earn its place.
+
+---
+
+# 18. COMMAND AUDIT METHOD
+
+Every command from the old repository should be placed into exactly one initial category:
+
+### KEEP
+
+Useful, safe, understandable, and sufficiently healthy.
+
+### REWRITE
+
+Useful feature but poor implementation.
+
+### MERGE
+
+Duplicate/overlapping functionality.
+
+### REMOVE
+
+Broken, unsafe, useless, obsolete, redundant, or not worth maintenance.
+
+### NEW
+
+Required by NOVA_VOID but missing from the old bot.
+
+Do not blindly port every command.
+
+---
+
+# 19. COMMAND ENGINE
+
+The old command system contains useful concepts:
+
+- dynamic loading
 - aliases
 - categories
 - duplicate protection
 - plugin registration
 
-Keep those concepts but rewrite the implementation cleanly.
+NOVA_VOID should preserve those concepts while using a clean implementation.
 
 Target structure:
 
-core/
-  commands/
-    registry.js
-    loader.js
-    executor.js
-  message/
-    normalize.js
-    context.js
-    triggers.js
-    dispatcher.js
-  permissions/
-    owner.js
-    admin.js
-    sudo.js
-  events/
-    messages.js
+```text
+src/core/commands/
+├── registry.js
+├── loader.js
+└── executor.js
+```
 
-PERMISSION MODEL
-----------------
-Simplify the old owner/sudo/admin model into a clear hierarchy:
+A command should ideally be a small module that declares:
 
+- name
+- aliases
+- category
+- description
+- permissions
+- handler
+
+The command engine should handle common mechanics centrally.
+
+---
+
+# 20. MESSAGE ARCHITECTURE
+
+The old message handler does too much in one place.
+
+It handles:
+
+- sender identification
+- owner detection
+- sudo
+- dual users
+- prefix parsing
+- command lookup
+- group metadata
+- admin checks
+- bot-admin checks
+- public/private mode
+- cooldowns
+- reactions
+- command execution
+- statistics
+- errors
+
+NOVA_VOID must split these responsibilities.
+
+Target:
+
+```text
+src/core/message/
+├── normalize.js
+├── context.js
+├── triggers.js
+└── dispatcher.js
+```
+
+And:
+
+```text
+src/core/permissions/
+├── roles.js
+├── owner.js
+├── admin.js
+└── sudo.js
+```
+
+---
+
+# 21. MESSAGE NORMALIZATION
+
+Every WhatsApp message should become a consistent internal object.
+
+Minimum fields:
+
+```text
+id
+chatJid
+senderJid
+botJid
+text
+mentionedJids
+quotedParticipant
+isGroup
+isFromBot
+timestamp
+raw
+```
+
+The transport layer should hide Baileys-specific details from command/AI logic as much as possible.
+
+---
+
+# 22. PERMISSION MODEL
+
+Simplified hierarchy:
+
+```text
 OWNER
-  -> TRUSTED/SUDO
-  -> PREMIUM (future commercial tier)
-  -> ADMIN
-  -> USER
+  ↓
+SUDO / TRUSTED
+  ↓
+PREMIUM (future)
+  ↓
+ADMIN
+  ↓
+USER
+```
 
-Owner-only operations must be enforced centrally, not trusted to individual command authors.
+The central permission system must prevent users from reaching owner-only operations.
 
-WHATSAPP CORE
--------------
-The old project mixes connection handling into a large obfuscated engine.
+Dangerous operations such as:
+
+- shell execution
+- eval
+- credential changes
+- global AI-history deletion
+- bot shutdown
+- plugin installation
+
+must not rely only on individual command authors remembering to check permissions.
+
+---
+
+# 23. WHATSAPP CONNECTION
+
+The old project contains useful reconnection principles but mixes connection handling with large/obfuscated code.
 
 NOVA_VOID should isolate:
 
+```text
 WhatsAppConnection
-  connect()
-  reconnect()
-  logout()
-  pair()
-  event handling
+├── connect()
+├── reconnect()
+├── logout()
+├── pair()
+└── events
+```
 
-Message normalization should produce a consistent context object for every message, including:
-- chat/group id
-- sender
-- participant
-- message id
-- text/body
-- command/prefix
-- mentioned JIDs
-- quoted/replied message metadata
-- whether the message is a reply to NOVA_VOID
-- group metadata
-- sender/admin/owner permissions
+Avoid reconnect loops.
 
-CHATBOT TRIGGER RULE
---------------------
-With chatbot enabled:
+Avoid starting multiple concurrent connections.
 
-TRIGGER = direct mention OR reply-to-NOVA_VOID
+Authentication/session credentials are sensitive and must never be committed.
 
-NOT A TRIGGER = normal message without mention/reply
+---
 
-Do not use a broad 'contains @' rule because that can trigger on arbitrary text.
+# 24. STORAGE
 
-DATABASE/STORAGE
-----------------
-The old project has basic runtime JSON storage but does not provide the clean data model needed for the new AI system.
+The old project uses basic runtime JSON configuration but does not provide the clean storage model required by the AI system.
 
 Target concepts:
 
+```text
 storage/
-  config/
-  users/
-  groups/
-  sessions/
-    ai/
-  memory/
-  cache/
+├── config/
+├── users/
+├── groups/
+├── sessions/
+│   └── ai/
+├── memory/
+└── cache/
+```
 
-Separate:
-- temporary AI conversation history
-- persistent .train knowledge
-- user settings
-- group chatbot settings
+The final implementation may use a proper database instead of these literal folders.
+
+The key requirement is separation of concerns.
+
+---
+
+# 25. DATABASE REQUIREMENTS
+
+Persistent data should distinguish:
+
+- users
+- groups
+- permissions
+- chatbot settings
+- AI sessions
+- training memory
 - bot configuration
 
-.clear-h clears conversation history only.
-.clear-h all is owner-only and clears all conversation histories.
-.train data survives history clearing.
+Conversation history must be scoped.
 
-STARTUP
--------
-Target bootstrap:
+Training memory must survive `.clear-h`.
 
+Global history deletion must be owner-only.
+
+---
+
+# 26. STARTUP ARCHITECTURE
+
+Target:
+
+```text
 index.js
-  -> load/validate environment
-  -> initialize storage/database
-  -> load commands
-  -> load plugins
-  -> initialize AI manager
-  -> initialize WhatsApp connection
-  -> register events
-  -> READY
+   ↓
+load environment
+   ↓
+validate configuration
+   ↓
+initialize storage/database
+   ↓
+load commands
+   ↓
+load plugins
+   ↓
+initialize AI manager
+   ↓
+connect WhatsApp
+   ↓
+register message/event handlers
+   ↓
+READY
+```
 
-Startup errors should identify the failing subsystem clearly.
+Errors should clearly identify which subsystem failed.
 
-DEPENDENCY CLEANUP
-------------------
-The old KING-VOID package has multiple Baileys implementations and a very large dependency tree.
+---
 
-NOVA_VOID should:
-- start with one WhatsApp implementation
-- add dependencies only when required by selected features
-- avoid duplicate media/downloader libraries
-- keep Termux installation practical
-- periodically remove unused dependencies
+# 27. DEPENDENCY CLEANUP
 
-SECURITY
---------
-Known old-project concerns:
-- credential-like values/API secrets existed in configuration/source
-- updater could download/copy/delete files in ways unsuitable for a commercial product
-- giant eval/shell/owner functionality needs careful permission isolation
+The old project contains multiple Baileys implementations and a large dependency tree.
 
-NOVA_VOID rules:
-- no real secrets in Git
-- .env ignored
-- .env.example placeholders only
-- rotate old exposed credentials if they are still active
-- owner/admin dangerous commands must be centrally protected
-- never allow ordinary users to execute arbitrary shell/eval
-- validate downloaded media/files
-- limit AI request size and rate
-- limit history size
-- log security-sensitive actions
+NOVA_VOID should begin with a small dependency set.
 
-UPDATER
--------
+Rules:
+
+- One WhatsApp implementation.
+- Avoid duplicate media/download libraries.
+- Add native dependencies only when truly required.
+- Avoid unnecessarily large build systems.
+- Keep Termux installation practical.
+- Remove unused dependencies periodically.
+
+---
+
+# 28. SECURITY FINDINGS FROM THE OLD PROJECT
+
+The audit found several issues that must not be copied forward.
+
+### Hard-coded credentials
+
+Old configuration contained credential-like/API values.
+
+NOVA_VOID must never commit real keys.
+
+If old credentials are still active, rotate/revoke them.
+
+### Giant eval/shell capabilities
+
+Dangerous capabilities existed in the old message system.
+
+NOVA_VOID must centralize and restrict them.
+
+Ordinary users must never have arbitrary shell/eval access.
+
+### Updater
+
+The old updater could download/copy/delete files in ways unsuitable for a commercial product.
+
+NOVA_VOID should use a predictable release-based updater later.
+
+### Session data
+
+WhatsApp authentication files must remain outside Git.
+
+---
+
+# 29. `.ENV` / SECRETS POLICY
+
+Use:
+
+```text
+.env
+.env.example
+```
+
+`.env` must be ignored by Git.
+
+`.env.example` contains placeholders only.
+
+Example:
+
+```text
+OPENAI_API_KEY=
+GEMINI_API_KEY=
+GROQ_API_KEY=
+IMAGE_API_KEY=
+VIDEO_API_KEY=
+```
+
+Do not put real values in documentation, commits, examples, or source code.
+
+---
+
+# 30. UPDATER POLICY
+
 Do not copy the old updater.
 
-Future updater must be:
+A future updater should be:
+
 - versioned
-- predictable
 - release-based
-- capable of rollback
-- careful with customer configuration/data
+- predictable
+- rollback-capable
+- customer-data-safe
 - tied to NOVA_VOID releases
 
-TERMUX REQUIREMENT
-------------------
-The user works primarily from Android/Termux and has no PC.
+Updater development should happen after the core bot is stable.
 
-Therefore:
-- keep Node.js support practical for Termux
-- avoid unnecessary native dependencies
-- document system packages when required
-- keep install steps simple
-- avoid huge build toolchains where possible
-- test startup and common commands in a lightweight environment where possible
+---
 
-COMMERCIALIZATION
------------------
-The long-term goal is to make NOVA_VOID good enough to package/sell.
+# 31. TERMUX / PHONE REQUIREMENTS
 
-Before commercial release:
-- audit repository licenses
-- audit licenses of selected dependencies
-- preserve required attribution
-- remove incompatible/proprietary copied code
-- rewrite unclear/obfuscated components where necessary
-- remove exposed secrets
-- create proper documentation
-- create reproducible installation
+The user is developing from an Android phone.
+
+Current known environment:
+
+- Android 14
+- ARM64 / `aarch64`
+- Termux 0.118.3
+- F-Droid Termux build
+- Node.js `v26.4.0`
+- itel P665L
+
+The user previously used:
+
+```text
+proot-distro login debian2
+```
+
+for OpenCode.
+
+However, because mobile data is limited, do not reinstall Debian/PRoot unless it is actually necessary.
+
+Prefer direct Termux compatibility where practical.
+
+Do not make the user download a giant toolchain unnecessarily.
+
+---
+
+# 32. CODING-AGENT STRATEGY
+
+The user previously tried OpenCode Zen and was unhappy with its results.
+
+The user wants a coding workflow that can:
+
+```text
+work → inspect → fix → test → continue → ask only when necessary
+```
+
+The user asked about free alternatives.
+
+The important constraint is:
+
+> **The user has no money to spend on coding AI services.**
+
+Therefore future recommendations must prioritize free/open-source/local/legitimate free-tier options and must not assume paid subscriptions.
+
+Do not tell the user to install multiple agents unnecessarily.
+
+Because the user has limited data, research the current options before recommending a large installation.
+
+---
+
+# 33. COMMERCIAL GOAL
+
+The user wants NOVA_VOID to eventually be sellable.
+
+This does not mean rushing monetization before the core works.
+
+The correct order is:
+
+```text
+stable core
+→ reliable commands
+→ AI
+→ security
+→ testing
+→ documentation
+→ license audit
+→ packaging
+→ release
+→ commercial options
+```
+
+Before selling:
+
+- audit dependencies/licenses
+- remove incompatible copied code
+- preserve attribution where required
+- remove secrets
+- test clean installation
+- document configuration
 - create versioning/release process
-- add customer-safe configuration
-- consider licensing/activation only after the core product is stable
+- protect customer configuration/data
 
-CURRENT AUDIT CONCLUSIONS
--------------------------
-Levanter:
-- mature/large foundation
-- too monolithic for direct continuation
-- useful reference only
+---
 
-KING-VOID/Crysnova:
-- better feature inventory and modular command layout
-- useful AI experiments and many commands
-- dependency bloat and mixed implementations
-- some large/obfuscated files
-- useful concepts should be extracted, not blindly copied
+# 34. CURRENT REPOSITORY STATE
 
+The user merged the NOVA_VOID rebuild into `main` via PR #1.
+
+Therefore the current `main` is the active NOVA_VOID checkpoint.
+
+The repository already contains the NOVA_VOID foundation and project documentation.
+
+The `NOVA_VOID/work.txt` file itself is this master document.
+
+This document should be continuously updated when major architectural decisions change.
+
+---
+
+# 35. IMPLEMENTATION WORK ALREADY STARTED
+
+The rebuild has already established pieces of:
+
+- AI provider abstraction
+- AI provider router/fallback concept
+- AI session store
+- chatbot trigger logic
+- message normalization
+- command registry concepts
+- role/permission foundation
+- `.ai`/history/training-related foundations in the rebuild work
+- initial configuration/environment separation
+- project documentation
+
+However:
+
+> **Do not assume every reported feature is production-ready merely because a file exists.**
+
+The next coding agent must inspect actual current files and run checks before calling the implementation complete.
+
+---
+
+# 36. IMPORTANT CORRECTION ABOUT STATUS REPORTING
+
+Earlier progress reports sometimes described batches as more complete than the repository verification justified.
+
+Going forward, status must be based on actual repository state.
+
+Use labels such as:
+
+- `DONE — verified`
+- `IMPLEMENTED — needs integration/testing`
+- `IN PROGRESS`
+- `PLANNED`
+- `BLOCKED`
+
+Do not claim tests were run unless they were actually run.
+
+Do not claim a command works end-to-end unless its handler, registration, runtime path, and dependencies are verified.
+
+---
+
+# 37. TESTING STRATEGY
+
+Every important subsystem should have tests where practical.
+
+Priority tests:
+
+### Message tests
+
+- mention triggers chatbot
+- reply-to-bot triggers chatbot
+- unrelated `@` does not trigger chatbot
+- normal group message does not trigger chatbot
+- bot's own messages do not trigger itself
+
+### Permission tests
+
+- owner recognized
+- sudo recognized
+- admin recognized
+- normal user denied owner-only operations
+
+### AI session tests
+
+- create session
+- append message
+- retrieve history
+- clear current history
+- clear all histories
+- history isolation between users/groups
+
+### Command tests
+
+- registration
+- aliases
+- duplicate detection
+- permission enforcement
+- unknown command handling
+
+### Provider tests
+
+- provider registration
+- provider selection
+- fallback when provider fails
+- no-provider error
+
+---
+
+# 38. AI TOKEN/DATA EFFICIENCY
+
+Because the user has limited resources, the AI system should minimize unnecessary API use.
+
+Rules:
+
+- Do not send full histories when unnecessary.
+- Keep configurable maximum history messages/tokens.
+- Summarize long history later if useful.
+- Avoid repeated system prompts when the provider supports reusable context.
+- Do not send irrelevant group messages.
+- Do not invoke AI for untriggered messages.
+- Apply cooldown/rate limits where appropriate.
+- Allow provider fallback instead of repeated retries.
+- Keep generated media requests bounded.
+
+---
+
+# 39. PRIVACY
+
+AI conversation history is sensitive user data.
+
+Rules:
+
+- Store only what is needed.
+- Scope histories to users/sessions.
+- Do not show one user's history to another.
+- Owner access should be explicit and documented.
+- `.clear-h` must work reliably.
+- Global clearing must be owner-only.
+- Avoid logging raw AI conversations by default.
+
+---
+
+# 40. CHATBOT PERSONALITY
+
+The bot should feel like a helpful WhatsApp assistant, not a command-line API.
+
+Example:
+
+```text
 NOVA_VOID:
-- clean hybrid/new implementation
-- KING-VOID_MDX is primary feature reference
-- Levanter is secondary reference
-- old main branches remain untouched
+Hey there 👋
+How can I help you?
+```
 
-WORK ORDER
-----------
-1. Preserve old repos/main branches. DONE.
-2. Create nova-void-rebuild branch. DONE.
-3. Add initial NOVA_VOID documentation/foundation. DONE.
-4. Audit connection/message/command/config/database/session systems. IN PROGRESS / AUDITED.
-5. Audit AI implementations deeply. NEXT.
-6. Build command inventory: KEEP/REWRITE/MERGE/REMOVE/NEW. NEXT.
-7. Implement clean core and command registry/loader.
-8. Implement AI provider abstraction/router.
-9. Implement AI session/history system.
-10. Implement .train memory system.
-11. Implement .chatbot mention/reply-only trigger behavior.
-12. Implement .ai.
-13. Implement .clear-h and owner-only .clear-h all.
-14. Implement .generate provider abstraction.
-15. Select/port useful commands to ~150–180.
-16. Security review.
-17. Termux install/test path.
-18. License/dependency/commercial review.
-19. Documentation.
-20. Release candidate.
+The exact personality should be configurable through `.train`/bot configuration.
 
-DO NOT DO
----------
-- Do not blindly port all old commands.
-- Do not preserve Crysnova branding.
-- Do not add dozens of AI commands.
-- Do not commit API keys/session credentials.
-- Do not use multiple competing Baileys packages in the new core.
-- Do not delete old repositories while rebuilding.
-- Do not claim generated images/video are free/unlimited without verifying the current provider terms.
-- Do not expose private user AI history.
-- Do not let chatbot mode answer every group message.
-- Do not spend the user's chat limit explaining every tiny implementation detail; batch work and report concise milestones.
+Do not hard-code a personality that cannot be changed.
 
-CODING AGENT INSTRUCTIONS
--------------------------
-This document is the source of truth for the rebuild unless the user explicitly changes a requirement.
+---
 
-When asked to continue:
-1. Inspect current NOVA_VOID branch state.
-2. Read this file.
-3. Check existing changes before writing.
-4. Continue the highest-priority unfinished work item.
-5. Make safe incremental commits.
-6. Run available checks/tests.
-7. Report only the important milestone/results/blockers.
+# 41. FUTURE PREMIUM/COMMERCIAL MODEL
 
-If an implementation choice is uncertain but does not materially affect the user's requirements, choose the simplest maintainable option and continue rather than asking unnecessary questions.
+Potential future tiers could include:
 
-USER'S CORE PRODUCT VISION
--------------------------
-A clean, useful WhatsApp bot called NOVA_VOID MDX with roughly 150–180 reliable commands and a small but genuinely useful AI system. The AI should feel natural in WhatsApp, respond when mentioned or replied to, remember authorized conversations, allow owner-controlled training/personality, support one-off AI requests, and eventually generate images (and video if a viable provider is available). The product should be maintainable, Termux-friendly, secure, and eventually sellable.
+### Free
+
+- core commands
+- basic chatbot
+- limited AI
+
+### Premium
+
+- larger AI limits
+- image generation
+- additional commands
+- enhanced memory
+- optional customer support
+
+These are future ideas only.
+
+Do not implement payment/activation systems before the core is stable.
+
+---
+
+# 42. RECOMMENDED FINAL DIRECTORY SHAPE
+
+The exact structure can evolve, but the architectural intention is:
+
+```text
+NOVA_VOID/
+├── src/
+│   ├── ai/
+│   │   ├── provider.js
+│   │   ├── router.js
+│   │   ├── session-store.js
+│   │   ├── memory.js
+│   │   ├── chatbot.js
+│   │   ├── generate.js
+│   │   └── prompts.js
+│   │
+│   ├── config/
+│   │   ├── env.js
+│   │   ├── bot.js
+│   │   ├── whatsapp.js
+│   │   ├── ai.js
+│   │   └── permissions.js
+│   │
+│   ├── core/
+│   │   ├── commands/
+│   │   │   ├── registry.js
+│   │   │   ├── loader.js
+│   │   │   └── executor.js
+│   │   │
+│   │   ├── message/
+│   │   │   ├── normalize.js
+│   │   │   ├── context.js
+│   │   │   ├── triggers.js
+│   │   │   └── dispatcher.js
+│   │   │
+│   │   ├── permissions/
+│   │   │   ├── roles.js
+│   │   │   ├── owner.js
+│   │   │   ├── admin.js
+│   │   │   └── sudo.js
+│   │   │
+│   │   └── events/
+│   │       └── messages.js
+│   │
+│   ├── commands/
+│   │   ├── ai/
+│   │   ├── owner/
+│   │   ├── admin/
+│   │   ├── group/
+│   │   ├── media/
+│   │   ├── downloader/
+│   │   ├── utility/
+│   │   ├── search/
+│   │   ├── fun/
+│   │   ├── converter/
+│   │   └── system/
+│   │
+│   ├── storage/
+│   └── index.js
+│
+├── test/
+├── .env.example
+├── .gitignore
+├── package.json
+├── README.md
+├── ARCHITECTURE.md
+└── work.txt
+```
+
+---
+
+# 43. COMMAND PRIORITY
+
+Do not start by porting 180 commands.
+
+First make these reliable:
+
+### Core
+
+- help
+- menu
+- ping
+- runtime/status
+- owner information
+- settings
+
+### AI
+
+- `.chatbot on/off`
+- `.ai`
+- `.train`
+- `.history`
+- `.clear-h`
+- `.generate`
+
+### Owner/Admin
+
+- settings
+- permissions
+- group management
+- moderation
+
+Then port the highest-value media/download/utility commands.
+
+---
+
+# 44. OLD COMMAND PORTING RULE
+
+For every candidate command ask:
+
+1. Does it work?
+2. Is it useful?
+3. Is it safe?
+4. Does another command already do it?
+5. Is the dependency reasonable?
+6. Is the API/provider reliable?
+7. Is it legally/licensing-wise suitable for commercial distribution?
+8. Can it run reasonably on Termux?
+
+Only then port it.
+
+---
+
+# 45. API PROVIDER RESEARCH RULE
+
+Because free APIs change frequently:
+
+- Verify current availability before using them.
+- Verify quotas.
+- Verify terms.
+- Verify whether commercial use is allowed.
+- Verify rate limits.
+- Prefer providers with stable official documentation.
+- Never build the entire architecture around a temporary unofficial gateway.
+
+---
+
+# 46. IMAGE GENERATION RULE
+
+Image generation should be an adapter.
+
+Example conceptual interface:
+
+```text
+generateImage({
+  prompt,
+  aspectRatio,
+  quality,
+  user
+})
+```
+
+The command should not know which provider generated the image.
+
+---
+
+# 47. VIDEO GENERATION RULE
+
+Video generation is optional and later.
+
+It should use a similar adapter:
+
+```text
+generateVideo({
+  prompt,
+  duration,
+  aspectRatio,
+  user
+})
+```
+
+Do not make the bot dependent on video generation to operate.
+
+---
+
+# 48. FAILURE HANDLING
+
+A failed AI provider should not crash the WhatsApp bot.
+
+A failed image generation request should return a useful error.
+
+A failed command should not kill the message listener.
+
+A temporary WhatsApp disconnect should follow a controlled reconnect strategy.
+
+A malformed plugin should be isolated/disabled rather than taking down the whole bot where practical.
+
+---
+
+# 49. LOGGING
+
+Use structured, useful logs.
+
+Log:
+
+- startup
+- connection state
+- command errors
+- provider failures
+- plugin load failures
+- security-sensitive actions
+
+Avoid logging:
+
+- API keys
+- session credentials
+- full private AI conversations by default
+
+---
+
+# 50. RELEASE CHECKLIST
+
+Before calling NOVA_VOID a release candidate:
+
+- [ ] clean installation works
+- [ ] WhatsApp authentication works
+- [ ] reconnect works
+- [ ] command loader works
+- [ ] aliases work
+- [ ] permissions work
+- [ ] mention trigger works
+- [ ] reply trigger works
+- [ ] normal group message does not trigger chatbot
+- [ ] `.chatbot on/off` works
+- [ ] `.ai` works with a configured provider
+- [ ] `.history` works
+- [ ] `.clear-h` works
+- [ ] `.clear-h all` is owner-only
+- [ ] `.train` works
+- [ ] training survives history clearing
+- [ ] `.generate` works when a provider is configured
+- [ ] provider failure is handled
+- [ ] no secrets are committed
+- [ ] dependencies audited
+- [ ] licenses audited
+- [ ] Termux setup documented
+- [ ] useful command inventory completed
+- [ ] broken/duplicate commands removed
+- [ ] README completed
+- [ ] release/version process documented
+
+---
+
+# 51. CURRENT NEXT STEPS
+
+The next coding work should proceed in this order:
+
+## Step 1 — Inspect current actual state
+
+Read the current `NOVA_VOID/` files on `main`.
+
+Do not trust old progress summaries over the actual repository.
+
+## Step 2 — Verify core integration
+
+Confirm:
+
+- command registry
+- message normalization
+- message dispatch
+- WhatsApp event integration
+- permission integration
+- AI router
+- session store
+
+## Step 3 — Finish AI memory
+
+Implement persistent `.train` storage separately from conversation sessions.
+
+## Step 4 — Finish chatbot runtime integration
+
+Wire actual WhatsApp mention/reply metadata into chatbot triggering.
+
+## Step 5 — Finish commands
+
+Make `.chatbot`, `.ai`, `.history`, `.clear-h`, `.train`, and `.generate` real end-to-end commands.
+
+## Step 6 — Test
+
+Add/run tests.
+
+## Step 7 — Audit old AI implementations
+
+Inspect old AI commands and extract useful provider/model ideas.
+
+## Step 8 — Audit commands
+
+Build KEEP/REWRITE/MERGE/REMOVE/NEW inventory.
+
+## Step 9 — Port high-value commands
+
+Start with core, admin, utility, media, downloader, search, converter, and fun categories.
+
+## Step 10 — Security review
+
+Remove unsafe/obsolete patterns.
+
+## Step 11 — Termux validation
+
+Test the minimal installation path.
+
+## Step 12 — Commercial/license review
+
+Only after the core works.
+
+---
+
+# 52. CODING AGENT CONTINUATION INSTRUCTIONS
+
+If a future AI receives this repository, it should NOT ask the user to explain the project again.
+
+It should:
+
+1. Read this file.
+2. Inspect the actual current branch.
+3. Compare implementation to this document.
+4. Identify the highest-priority unfinished item.
+5. Implement it.
+6. Test it.
+7. Fix failures.
+8. Commit the work.
+9. Report a concise milestone.
+10. Continue when requested.
+
+If a requirement is already explicit here, do not ask the user to repeat it.
+
+If a decision genuinely requires the user's preference, ask one focused question.
+
+---
+
+# 53. DO NOT DO
+
+Never:
+
+- blindly copy the old bot
+- preserve unnecessary Crysnova branding
+- preserve multiple competing Baileys packages in the new core
+- commit real API keys
+- commit WhatsApp session credentials
+- make chatbot mode respond to every group message
+- expose private AI history
+- erase training memory when clearing chat history
+- claim free APIs are permanent
+- claim video generation is unlimited/free without verification
+- add hundreds of low-value commands
+- add dependencies without need
+- make the Termux installation unnecessarily huge
+- overwrite stable `main` with untested experimental work
+- pretend a feature is complete without checking it
+- waste the user's mobile data with unnecessary downloads
+- waste the user's ChatGPT limit with repetitive explanations
+
+---
+
+# 54. FINAL PRODUCT DEFINITION
+
+NOVA_VOID MDX is intended to become:
+
+> **A clean, modular, Termux-friendly WhatsApp bot with roughly 150–180 useful commands and a compact but genuinely useful AI assistant.**
+
+The AI assistant should:
+
+- answer when mentioned
+- answer when replied to/swiped to
+- remain silent during ordinary group conversation
+- support one-off AI requests
+- remember authorized conversation context
+- support owner-controlled training/personality
+- allow history viewing/clearing
+- support image generation through pluggable providers
+- optionally support video generation later
+
+The bot should be:
+
+- maintainable
+- secure
+- lightweight where practical
+- easy to configure
+- extensible
+- commercially auditable
+
+---
+
+# 55. END STATE
+
+The final workflow should look like:
+
+```text
+WhatsApp
+   ↓
+NOVA_VOID message adapter
+   ↓
+Normalized message/context
+   ↓
+┌──────────────────────────────┐
+│ Command?                     │
+│ Mention/reply chatbot?       │
+│ Other event/plugin?          │
+└──────────────┬───────────────┘
+               ↓
+        Permission layer
+               ↓
+       Command / AI router
+               ↓
+      ┌────────┴────────┐
+      ↓                 ↓
+ Commands              AI
+                         ↓
+                Provider router
+                 ↙      ↓      ↘
+              AI #1   AI #2   AI #3
+                         ↓
+                   Session/memory
+                         ↓
+                    WhatsApp reply
+```
+
+The user should eventually be able to install NOVA_VOID on a fresh Termux environment, configure the required credentials, pair WhatsApp, and run the bot without needing a PC.
+
+---
+
+# 56. PROJECT PHILOSOPHY
+
+Keep it simple.
+
+Build it properly.
+
+Do not chase command counts.
+
+Do not chase every AI model.
+
+Do not chase temporary free APIs.
+
+Do not destroy working history.
+
+Do not waste the user's data.
+
+Do not make the user explain the same thing twice.
+
+**Build NOVA_VOID one reliable layer at a time.**
+
+❤️

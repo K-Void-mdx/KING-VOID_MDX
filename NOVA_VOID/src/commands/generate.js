@@ -7,11 +7,11 @@ export function createGenerateCommand({ generation }) {
       if (!ctx.argsText) return ctx.reply('Usage: .generate <image prompt>');
       try {
         const result = await generation.image(ctx.argsText);
-        if (result?.buffer) return ctx.sendMedia?.({ type: 'image', buffer: result.buffer, caption: result.caption ?? '' });
+        if (result?.buffer && ctx.sendMedia) return ctx.sendMedia({ type: 'image', buffer: result.buffer, caption: result.caption ?? '' });
         if (result?.url) return ctx.reply(result.url);
         return ctx.reply('Image generation provider returned no usable media.');
-      } catch (error) {
-        return ctx.reply(`Image generation is not configured yet: ${error.message}`);
+      } catch {
+        return ctx.reply('Image generation is not configured yet. Add an image provider/API later.');
       }
     },
   };

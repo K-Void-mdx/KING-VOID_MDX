@@ -4,6 +4,7 @@ import { AIService } from '../ai/ai-service.js';
 import { AISessionStore } from '../ai/session-store.js';
 import { AIMemoryStore } from '../ai/memory-store.js';
 import { createPermissionChecker } from './permissions/check.js';
+import { clearCommands } from './commands/registry.js';
 import { createAICommands } from '../commands/ai.js';
 import { createChatbotCommand } from '../commands/chatbot.js';
 
@@ -15,6 +16,7 @@ export function createNovaApplication({ botJid, ownerJids = [], sudoJids = [], r
   const permissions = createPermissionChecker({ ownerJids, sudoJids });
   const app = new NovaApplication({ botJid, ownerJids, sudoJids, ai, sessions, memory, reply });
 
+  clearCommands();
   app.register(createAICommands({ ai, sessions, memory, permissions }));
   app.register(createChatbotCommand({ state: app.chatbot, permissions }));
   return { app, router, sessions, memory, ai };

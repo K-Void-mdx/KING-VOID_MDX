@@ -6,7 +6,7 @@ import { resolveRole, hasRole } from './permissions/roles.js';
 import { handleChatbotMessage } from '../ai/chatbot-service.js';
 
 export class NovaApplication {
-  constructor({ botJid, ownerJids = [], sudoJids = [], ai, sessions, memory, reply }) {
+  constructor({ botJid, ownerJids = [], sudoJids = [], ai, sessions, memory, reply, sendMedia }) {
     this.botJid = botJid;
     this.ownerJids = ownerJids;
     this.sudoJids = sudoJids;
@@ -14,6 +14,7 @@ export class NovaApplication {
     this.sessions = sessions;
     this.memory = memory;
     this.reply = reply;
+    this.sendMedia = sendMedia;
     this.chatbot = new ChatbotState();
   }
 
@@ -51,6 +52,7 @@ export class NovaApplication {
         argsText: parsed.text,
         role,
         reply: (text) => this.reply(message.chatJid, text),
+        sendMedia: this.sendMedia ? (media) => this.sendMedia(message.chatJid, media) : undefined,
       });
       return { handled: true, type: 'command', command: parsed.name };
     }

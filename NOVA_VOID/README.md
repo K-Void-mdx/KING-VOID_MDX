@@ -1,34 +1,68 @@
 # NOVA_VOID MDX
 
-A clean rebuild of the KING VOID MDX WhatsApp bot.
+A clean, modular WhatsApp bot built for Termux (Android, ARM64).
 
 ## Project goals
 
 - Small, useful command set (target: ~150–180 commands)
 - Event-driven WhatsApp core
 - Mention/reply-triggered AI chatbot
-- Session-based AI conversation history
+- Persistent, bounded conversation history
 - Owner-controlled training/memory
 - Provider-agnostic AI layer
 - Image generation with optional video-generation support
 - Clear permissions and privacy boundaries
 - Termux-friendly deployment
-- Commercial-product readiness, subject to dependency/license review
 
-## AI commands
+## Quick start (Termux)
 
-- `.chatbot on|off` — enable/disable mention/reply chatbot mode
-- `.train` — owner-controlled bot knowledge/personality memory
-- `.ai <prompt>` — one-off AI request
-- `.history` — inspect the current authorized AI session
-- `.clear-h` — clear the current session history
-- `.clear-h all` — owner-only global history reset
-- `.generate <prompt>` — image generation; video support will be provider-dependent
+```bash
+cd NOVA_VOID
+cp .env.example .env       # then edit OWNER_JIDS and PAIR_PHONE
+npm install                # installs only baileys + pino
+npm start
+```
 
-## Trigger behavior
+First run: the bot prints a pairing code — enter it in WhatsApp under
+**Linked devices → Link with phone number**.
 
-When chatbot mode is enabled, NOVA_VOID responds when directly mentioned or when a message is a WhatsApp reply to the bot. Ordinary group messages are ignored unless another command explicitly handles them.
+## Configuration
+
+All configuration lives in `.env` (see `.env.example`). Never commit `.env`.
+
+| Variable | Purpose |
+|---|---|
+| `BOT_NAME` | Display name (default `NOVA_VOID MDX`) |
+| `PREFIX` | Command prefix (default `.`) |
+| `OWNER_JIDS` | Comma-separated owner JIDs |
+| `SUDO_JIDS` | Comma-separated trusted users |
+| `PAIR_PHONE` | Phone number used once for pairing |
+| `AUTH_DIR` / `DATA_DIR` | Storage locations (gitignored) |
+
+## Commands
+
+Core:
+
+- `.ping` — liveness check
+- `.menu` — command list by category
+- `.status` — runtime status (owner/trusted)
+
+AI:
+
+- `.chatbot on|off` — per-chat chatbot toggle (owner)
+- `.ai <prompt>` — one-off AI request; honest error if no provider is configured
+- `.train <info>` — owner-only persistent knowledge
+- `.train-list` / `.train-remove <n>` — manage knowledge
+- `.history` — view your AI session history (owner/trusted)
+- `.clear-h` — clear your session history; `.clear-h all` is owner-only
+- `.generate <prompt>` — image generation when a provider is configured
+
+Chatbot triggers: direct @mention of the bot or a WhatsApp reply to a bot message. Ordinary messages are ignored.
 
 ## Status
 
-This branch is the clean rebuild workspace. Existing bot code remains untouched on `main` while the new architecture is developed here.
+Implemented and unit-tested: command registry/dispatcher, permissions,
+persistent chatbot state, persistent bounded history, training memory,
+rate limiting, pairing flow, core + AI commands. Provider adapters are
+not yet connected — `.ai`/`.generate` honestly report that no provider
+is configured until you add real credentials.

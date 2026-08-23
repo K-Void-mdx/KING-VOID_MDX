@@ -1,18 +1,20 @@
 {
-  "name": "king-void-mdx",
+  "name": "nova-void-mdx",
   "version": "3.0.0",
-  "description": "A modular WhatsApp bot focused on AI, automation, moderation, utilities and customization.",
+  "description": "NOVA_VOID MDX — modular WhatsApp bot with AI assistant, automation, moderation and utilities.",
   "main": "index.js",
   "type": "commonjs",
   "scripts": {
-    "start": "node index.js",
-    "dev": "nodemon index.js"
+    "start": "node NOVA_VOID/src/index.js",
+    "start:legacy": "node index.js",
+    "test:nova": "node --test NOVA_VOID/test/*.test.js",
+    "dev": "nodemon NOVA_VOID/src/index.js"
   },
   "keywords": [
     "whatsapp",
     "bot",
     "baileys",
-    "king-void",
+    "nova-void-mdx",
     "automation"
   ],
   "author": "King Val 👑",

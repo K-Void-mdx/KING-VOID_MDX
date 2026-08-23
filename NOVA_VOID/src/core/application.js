@@ -4,9 +4,21 @@ import { getCommand, registerCommand } from './commands/registry.js';
 import { ChatbotState } from './state/chatbot-state.js';
 import { resolveRole, hasRole } from './permissions/roles.js';
 import { handleChatbotMessage } from '../ai/chatbot-service.js';
+import { RateLimiter } from './rate-limit.js';
 
 export class NovaApplication {
-  constructor({ botJid, ownerJids = [], sudoJids = [], ai, sessions, memory, reply, sendMedia }) {
+  constructor({
+    botJid,
+    ownerJids = [],
+    sudoJids = [],
+    ai,
+    sessions,
+    memory,
+    reply,
+    sendMedia,
+    chatbot,
+    limiter,
+  }) {
     this.botJid = botJid;
     this.ownerJids = ownerJids;
     this.sudoJids = sudoJids;
@@ -15,11 +27,15 @@ export class NovaApplication {
     this.memory = memory;
     this.reply = reply;
     this.sendMedia = sendMedia;
-    this.chatbot = new ChatbotState();
+    this.chatbot = chatbot ?? new ChatbotState();
+    this.limiter = limiter ?? new RateLimiter({ windowMs: 15_000, max: 4 });
   }
 
   register(commands) {
-    for (const command of commands.flat()) registerCommand(command);
+    const list = Array.isArray(commands) ? commands.flat(Infinity) : [commands];
+    for (const command of list) {
+      if (command) registerCommand(command);
+    }
     return this;
   }
 
@@ -58,6 +74,11 @@ export class NovaApplication {
     }
 
     if (this.chatbot.isEnabled(message.chatJid)) {
+      // Per-user cooldown protects API quotas and mobile data.
+      const limitKey = `chatbot:${message.senderJid}`;
+      if (!this.limiter.allow(limitKey)) {
+        return { handled: false, reason: 'rate-limited' };
+      }
       const replied = await handleChatbotMessage({
         message,
         botJid: this.botJid,

@@ -12,6 +12,65 @@
 
 ---
 
+## 0.1 CONTINUATION LOG (update after each work batch)
+
+### Batch 2026-08-23 — repo hygiene + core hardening (status: IMPLEMENTED, unit-tested)
+
+Repository hygiene:
+- Root `.gitignore` repaired (was `node_modules/` only). Now blocks `sessions/`, `data/`, `.env`, caches, crash dumps.
+- `sessions/` (38,969 files incl. `creds.json`) and `.npm-cache/` UNTRACKED from git index. Local files untouched.
+- Deleted 7.5 GB `core` crash dump. Archived dead CODY-AI experiments (`?.js`, `?.js[old]`, `consolelog.txt`) to `~/.nova_trash/`.
+- Tracked file count reduced 40,768 → ~552.
+
+NOVA_VOID core (all in NOVA_VOID/, ESM, deps: baileys + pino only):
+- Persistence added: chatbot state (`data/chatbot-state.json`), per-session history files (`data/history/`, capped), training memory (`data/memory.json`). Atomic JSON writes via new `src/core/storage/json-store.js`.
+- `src/config/env.js`: loads `.env` itself (no dotenv dep), multi `OWNER_JIDS`/`SUDO_JIDS`, `PAIR_PHONE`, `AI_MAX_HISTORY`; paths resolved relative to NOVA_VOID/ regardless of cwd. Default BOT_NAME = "NOVA_VOID MDX".
+- `src/index.js`: pairing-code login flow for fresh installs; no per-boot version fetch (saves data); reconnect resets application; loggedOut handled explicitly.
+- Fixed pre-existing boot crash: `application.register()` failed on single-command factories (`.flat()` on non-array).
+- Chatbot path now answers honestly when no provider is configured instead of throwing silently.
+- `.history` gated to owner/trusted at dispatcher level (`role: 'sudo'`). `.clear-h all` remains owner-only. Self-clear allowed to any user for their own data.
+- Per-user rate limiting on chatbot + `.ai` (`src/core/rate-limit.js`).
+- New Tier-1 commands: `.ping`, `.menu`, `.status`.
+- Tests expanded to 9 (persistence round-trips, rate limiter, role hierarchy, triggers). All pass; all sources pass `node --check`.
+
+Still NOT done / next:
+- Provider adapters not connected: `.ai`/`.generate` honestly report "not configured". No keys exist; do not fake them.
+- Runtime verification against live WhatsApp requires installing baileys+pino into NOVA_VOID/ (~small download) — the ONLY pending internet need.
+- Old-bot command audit (467 legacy command files in src/Commands) — classify KEEP/MERGE/REMOVE before porting toward the 150–200 target.
+- Dependency pruning of root package.json (4 competing baileys forks etc.) after old-bot decision.
+
+### Batch 2026-08-23 (later) — full local review + legacy command audit
+
+Review results:
+- Found and fixed a real `.gitignore` bug: unanchored `core` pattern silently ignored `src/core/` source files. All ignore patterns now anchored (`/core`, `/data/`, `/sessions/`).
+- Verified: zero auth material staged; zero auth files tracked; `core` dump was never tracked (deletion lost nothing); archived CODY files referenced only by comments.
+- ⚠️ KNOWN ISSUE (reported, NOT fixed): `sessions/creds.json` and other session material remain in LOCAL git history (commit `58ebbfaf` "My version of King Void MDx") and possibly on origin. Do-not-rewrite rule respected. Mitigations before any commercial use: re-pair fresh (invalidates old keys), then decide on history rewrite / repo cleanup WITH owner approval.
+- ⚠️ Third-party API keys found hardcoded (and thus already leaked) in legacy commands: RapidAPI key ×2 files, Freesound token ×2 files, weather API key ×1. If these belong to the owner, revoke/regenerate and use `.env`. Never copy them into NOVA_VOID.
+- Legacy entry chain `index.js → ☁︎.js → ⚉.js` is OBFUSCATED (78 obfuscated js files overall) with CRYSNOVA/ZEE-BOT branding, hardcoded newsletter JID, catbox CDN URLs, and a fallback owner phone number in `settings/config.js`. Per §40 this whole chain stays REFERENCE-ONLY.
+
+Legacy command inventory (static analysis, nothing executed):
+- 457 command files → 352 declare a `name:` (~347 unique); 105 are non-standard utilities/classes.
+- 1,698 alias declarations with 816 colliding aliases (legacy loader silently keeps first-come).
+- 5 duplicate command names across categories (weather, online, rapidapi, bank, comic2).
+- Abuse surface: `src/Commands/B×͜×☠︎︎/` (bug/crash tooling incl. `filebomb`) → REMOVE entirely. No attack/crash/freeze/spam/mass-report commands may be migrated.
+
+Command migration strategy (target ≈150–200 useful commands):
+| Wave | Source categories | Est. keep | Rules |
+|---|---|---|---|
+| 1 | Core/System/Bot basics | ~10 | menu/help/ping/status/runtime/settings |
+| 2 | Owner + Admin | ~35–45 | central role enforcement; no shell/eval |
+| 3 | Group management | ~20 | promote/kick/welcome/antibulk hygiene |
+| 4 | Utility/Converter/Documents | ~40–50 | best-of; merge duplicates first |
+| 5 | Media/Media-Editor | ~20–25 | requires ffmpeg/sharp decision later |
+| 6 | Downloader/Search | ~15–25 | lawful sources only; env-based keys; drop dead APIs |
+| 7 | Fun/Games/Quiz/Anime | ~15–20 | low priority |
+
+Global rules: skip all 78 obfuscated files unless behavior is re-implemented cleanly; every ported command declares name/aliases/category/description/usage/role; aliases capped (~2–3 each); duplicate names rejected at registration (already enforced); any external API key must come from `.env`; rate-limit expensive commands. Realistic landing zone: ~150–180 commands.
+
+
+
+---
+
 ## 0. READ THIS FIRST
 
 This document is the project's source of truth for **intent and direction**.

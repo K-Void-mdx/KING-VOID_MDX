@@ -61,10 +61,10 @@ export function createAICommands({ ai, sessions, memory, limiter }) {
       category: 'ai',
       role: 'owner',
       usage: '.train <information>',
-      description: 'Teach NOVA_VOID persistent knowledge.',
+      description: 'Teach NOVA_VOID knowledge every chat can use.',
       async execute(ctx) {
         if (!ctx.argsText) return ctx.reply('Usage: .train <information>');
-        memory.add(ctx.senderJid, ctx.argsText);
+        memory.add('*', ctx.argsText, { scope: 'global' });
         return ctx.reply('Learned and stored in NOVA_VOID memory.');
       },
     },
@@ -75,7 +75,7 @@ export function createAICommands({ ai, sessions, memory, limiter }) {
       role: 'owner',
       description: 'List stored training memory.',
       async execute(ctx) {
-        const records = memory.list(ctx.senderJid);
+        const records = memory.listAll('global');
         if (!records.length) return ctx.reply('NOVA_VOID has no stored training memory yet.');
         return ctx.reply(records.map((item, index) => `${index + 1}. ${item.content}`).join('\n'));
       },
@@ -88,9 +88,9 @@ export function createAICommands({ ai, sessions, memory, limiter }) {
       description: 'Remove a training memory entry by number.',
       async execute(ctx) {
         const index = Number(ctx.args?.[0]);
-        const records = memory.list(ctx.senderJid);
+        const records = memory.listAll('global');
         if (!Number.isInteger(index) || index < 1 || index > records.length) return ctx.reply('Usage: .train-remove <number>');
-        memory.remove(ctx.senderJid, records[index - 1].id);
+        memory.remove('*', records[index - 1].id, 'global');
         return ctx.reply('Training memory removed.');
       },
     },

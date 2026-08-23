@@ -26,8 +26,14 @@ export function createNovaApplication({
   videoProvider = null,
   storage = {},
   limiter,
+  prefixes = ['.'],
+  botName = 'NOVA_VOID MDX',
+  maxHistory = 40,
 }) {
-  const sessions = new AISessionStore({ maxMessages: 40, dirPath: storage.sessionsDir });
+  const sessions = new AISessionStore({
+    maxMessages: Math.max(1, Number(maxHistory) || 40),
+    dirPath: storage.sessionsDir,
+  });
   const memory = new AIMemoryStore({ filePath: storage.memoryFile });
   const router = new AIRouter();
   const ai = new AIService({ router, sessions, memory });
@@ -44,10 +50,12 @@ export function createNovaApplication({
     reply,
     sendMedia,
     limiter: limiter ?? new RateLimiter({ windowMs: 15_000, max: 4 }),
+    prefixes,
+    botName,
   });
 
   clearCommands();
-  app.register(createCoreCommands({ app }));
+  app.register(createCoreCommands({ app, botName, prefix: Array.isArray(prefixes) ? prefixes[0] : '.' }));
   app.register(createAICommands({ ai, sessions, memory }));
   app.register(createChatbotCommand({ state: app.chatbot }));
   app.register(createGenerateCommand({ generation }));

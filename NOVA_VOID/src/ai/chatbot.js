@@ -17,10 +17,19 @@ export function isChatbotTrigger(message, botJid) {
   return mentioned || repliedToBot;
 }
 
-export function stripBotMention(text = '', botJid) {
-  if (!text || !botJid) return String(text).trim();
-  const number = String(botJid).split('@')[0].split(':')[0];
-  return String(text)
-    .replace(new RegExp(`@${number}\\b`, 'g'), '')
-    .trim();
+/**
+ * Removes bot-addressment artifacts from the prompt text.
+ * WhatsApp renders mentions as "@DisplayName" (not "@number"), so when the
+ * message was a direct mention we also drop leading @tokens; plain numbers
+ * are stripped regardless.
+ */
+export function stripBotMention(text = '', botJid, { mentioned = false } = {}) {
+  let out = String(text ?? '').trim();
+  if (!out) return '';
+  if (botJid) {
+    const number = String(botJid).split('@')[0].split(':')[0];
+    if (number) out = out.replace(new RegExp(`@${number}\\b`, 'g'), '');
+  }
+  if (mentioned) out = out.replace(/^(?:@\S+\s*)+/, '');
+  return out.trim();
 }

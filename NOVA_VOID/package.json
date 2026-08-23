@@ -8,7 +8,7 @@
   "scripts": {
     "start": "node src/index.js",
     "test": "node --test test/*.test.js",
-    "check": "node --check src/index.js && node --check src/core/application.js && node --check src/core/factory.js && node --check src/ai/ai-service.js && node --check src/commands/ai.js && node --check src/commands/chatbot.js"
+    "check": "find src -name '*.js' -print0 | xargs -0 -n1 node --check"
   },
   "engines": {
     "node": ">=20"

@@ -1,8 +1,12 @@
-import { loadJson, saveJson } from '../core/storage/json-store.js';
+import { loadJson, saveJson, capArray } from '../core/storage/json-store.js';
+
+const MAX_RECORDS_PER_KEY = 200;
 
 /**
  * Persistent training knowledge ("what the bot was taught").
- * Deliberately separate from conversation history: .clear-h must never touch it.
+ * Scope "global" entries (owner-authorized) are injected into every AI chat;
+ * per-user scopes stay private to their owner. Deliberately separate from
+ * conversation history: .clear-h must never touch it.
  * Pass filePath to persist; omit for in-memory use (tests).
  */
 export class AIMemoryStore {
@@ -33,9 +37,20 @@ export class AIMemoryStore {
     const records = this.#records.get(key) ?? [];
     const record = { id: crypto.randomUUID(), content: String(content).trim(), source, createdAt: Date.now() };
     records.push(record);
+    capArray(records, MAX_RECORDS_PER_KEY);
     this.#records.set(key, records);
     this.#persist();
     return { ...record };
+  }
+
+  /** All records across owners for a scope (used for global bot knowledge). */
+  listAll(scope = 'global') {
+    const prefix = `${String(scope).trim().toLowerCase()}:`;
+    const all = [];
+    for (const [key, list] of this.#records) {
+      if (key.startsWith(prefix)) for (const item of list) all.push({ ...item });
+    }
+    return all;
   }
 
   remove(ownerJid, id, scope = 'bot') {

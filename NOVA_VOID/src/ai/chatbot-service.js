@@ -11,7 +11,9 @@ export async function handleChatbotMessage({ message, botJid, enabled, ai, reply
   if (!enabled || message.isFromBot) return false;
   if (!isChatbotTrigger(message, botJid)) return false;
 
-  const prompt = stripBotMention(message.text, botJid);
+  const mentioned = (message.mentionedJids ?? [])
+    .some((jid) => String(jid).toLowerCase().replace(/:\d+(?=@)/, '') === String(botJid).toLowerCase().replace(/:\d+(?=@)/, ''));
+  const prompt = stripBotMention(message.text, botJid, { mentioned });
   if (!prompt) return false;
 
   let answer;

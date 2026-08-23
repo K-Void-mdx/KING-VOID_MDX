@@ -3,9 +3,7 @@ import { listCommands } from '../core/commands/registry.js';
 /**
  * Tier-1 core commands: ping, status, menu.
  */
-export function createCoreCommands({ app }) {
-  const startedAt = Date.now();
-
+export function createCoreCommands({ app, botName = 'NOVA_VOID MDX', prefix = '.' }) {
   return [
     {
       name: 'ping',
@@ -13,7 +11,7 @@ export function createCoreCommands({ app }) {
       description: 'Check that the bot is alive.',
       async execute(ctx) {
         const uptime = formatUptime(process.uptime());
-        return ctx.reply(`*${'NOVA_VOID MDX'}* is alive.\nUptime: ${uptime}`);
+        return ctx.reply(`*${botName}* is alive.\nUptime: ${uptime}`);
       },
     },
     {
@@ -23,7 +21,7 @@ export function createCoreCommands({ app }) {
       description: 'Bot runtime status (owner/trusted).',
       async execute(ctx) {
         const lines = [
-          '*NOVA_VOID MDX — STATUS*',
+          `*${botName} — STATUS*`,
           `Uptime: ${formatUptime(process.uptime())}`,
           `Chatbot chats: ${app.chatbot.list().length}`,
           `AI sessions in memory: ${app.sessions.size()}`,
@@ -46,12 +44,12 @@ export function createCoreCommands({ app }) {
           if (!byCategory.has(category)) byCategory.set(category, []);
           byCategory.get(category).push(command);
         }
-        const sections = [`*NOVA_VOID MDX — MENU*`];
+        const sections = [`*${botName} — MENU*`];
         for (const [category, items] of [...byCategory.entries()].sort()) {
           sections.push(`\n*${category.toUpperCase()}*`);
           for (const item of items) {
             const usage = item.usage ? ` — ${item.usage}` : '';
-            sections.push(`• .${item.name}${usage}`);
+            sections.push(`• ${prefix}${item.name}${usage}`);
           }
         }
         sections.push(`\nTotal: ${commands.length} commands`);

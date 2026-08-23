@@ -12,6 +12,9 @@ import { createNovaApplication } from './core/factory.js';
 assertValidEnv();
 
 const logger = pino({ level: env.nodeEnv === 'production' ? 'info' : 'debug' });
+// Baileys is extremely chatty at debug level; keep its own output terse to save
+// battery and data on Termux.
+const baileysLogger = pino({ level: env.nodeEnv === 'production' ? 'error' : 'warn' });
 let reconnectTimer;
 
 export async function startNovaVoid() {
@@ -24,9 +27,9 @@ export async function startNovaVoid() {
   const sock = makeWASocket({
     auth: {
       creds: state.creds,
-      keys: makeCacheableSignalKeyStore(state.keys, logger),
+      keys: makeCacheableSignalKeyStore(state.keys, baileysLogger),
     },
-    logger,
+    logger: baileysLogger,
     markOnlineOnConnect: false,
     syncFullHistory: false,
   });
@@ -35,17 +38,16 @@ export async function startNovaVoid() {
 
   sock.ev.on('creds.update', saveCreds);
 
-  sock.ev.on('connection.update', ({ connection, lastDisconnect, qr }) => {
-    if (qr && !state.creds.registered) {
-      logger.warn('Not paired yet. Set PAIR_PHONE in .env to receive a pairing code.');
-    }
-
+  sock.ev.on('connection.update', ({ connection, lastDisconnect }) => {
     if (connection === 'open') {
       const botJid = sock.user?.id;
       application = createNovaApplication({
         botJid,
         ownerJids: env.ownerJids,
         sudoJids: env.sudoJids,
+        botName: env.botName,
+        prefixes: [env.prefix],
+        maxHistory: env.aiMaxHistory,
         storage: {
           chatbotStateFile: join(env.dataDir, 'chatbot-state.json'),
           sessionsDir: join(env.dataDir, 'history'),
@@ -62,8 +64,15 @@ export async function startNovaVoid() {
 
     if (connection === 'close') {
       application = undefined;
+      // Drop every listener on the dead socket so it can never ghost-process
+      // events while a replacement socket connects.
+      sock.ev.removeAllListeners();
       const statusCode = lastDisconnect?.error?.output?.statusCode;
       if (statusCode === DisconnectReason.loggedOut) {
+        if (reconnectTimer) {
+          clearTimeout(reconnectTimer);
+          reconnectTimer = undefined;
+        }
         logger.error('WhatsApp session logged out; delete data/auth and re-pair.');
         return;
       }
@@ -78,16 +87,24 @@ export async function startNovaVoid() {
   });
 
   // Pairing-code login for fresh installs (no QR scanner needed on Termux).
+  // requestPairingCode() only works once the WebSocket is open, so wait for
+  // the connection instead of firing immediately.
   if (!state.creds.registered) {
     if (!env.pairingPhone) {
       logger.warn('No PAIR_PHONE configured. Add PAIR_PHONE=<your number, country code first> to .env');
     } else {
-      try {
-        const code = await sock.requestPairingCode(env.pairingPhone);
-        logger.warn(`PAIRING CODE for ${env.pairingPhone}: ${formatPairingCode(code)}`);
-        console.log(`\n  NOVA_VOID MDX pairing code: ${formatPairingCode(code)}\n  Enter it on WhatsApp: Linked devices -> Link with phone number.\n`);
-      } catch (error) {
-        logger.error({ error }, 'Failed to request pairing code');
+      const opened = await waitForConnectionOpen(sock);
+      if (!opened) {
+        logger.warn('Socket closed before pairing could start; retrying on reconnect.');
+      } else if (!state.creds.registered) {
+        try {
+          const code = await sock.requestPairingCode(env.pairingPhone);
+          const pretty = formatPairingCode(code);
+          logger.warn(`PAIRING CODE for ${env.pairingPhone}: ${pretty}`);
+          console.log(`\n  NOVA_VOID MDX pairing code: ${pretty}\n  Enter it on WhatsApp: Linked devices -> Link with phone number.\n`);
+        } catch (error) {
+          logger.error({ error }, 'Failed to request pairing code');
+        }
       }
     }
   }
@@ -104,6 +121,27 @@ export async function startNovaVoid() {
   });
 
   return sock;
+}
+
+/** Resolves true on 'open', false on 'close', or false after timeoutMs. */
+function waitForConnectionOpen(sock, timeoutMs = 20_000) {
+  return new Promise((resolve) => {
+    const cleanup = () => {
+      clearTimeout(timer);
+      sock.ev.off('connection.update', handler);
+    };
+    const timer = setTimeout(() => {
+      cleanup();
+      resolve(false);
+    }, timeoutMs);
+    const handler = ({ connection }) => {
+      if (connection === 'open' || connection === 'close') {
+        cleanup();
+        resolve(connection === 'open');
+      }
+    };
+    sock.ev.on('connection.update', handler);
+  });
 }
 
 function formatPairingCode(code = '') {

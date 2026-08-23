@@ -5,8 +5,10 @@ const ROLE_RANK = Object.freeze({
   owner: 3,
 });
 
+// Baileys JIDs may carry a device suffix ("2348012345678:12@s.whatsapp.net").
+// Strip it so configured plain-number JIDs always match real senders.
 export function normalizeJid(value = '') {
-  return String(value).trim().toLowerCase();
+  return String(value).trim().toLowerCase().replace(/:\d+(?=@)/, '');
 }
 
 export function hasRole(role, requiredRole) {

@@ -7,10 +7,13 @@ export class AIService {
 
   async chat({ userJid, prompt, scope = 'private', provider, systemPrompt = '' }) {
     const session = this.sessions.ensure(userJid, scope);
-    const memories = this.memory.list(userJid, 'bot').map((item) => item.content);
+    const knowledge = [
+      ...this.memory.listAll('global'),
+      ...this.memory.list(userJid, 'bot'),
+    ].map((item) => item.content);
     const messages = [
       ...(systemPrompt ? [{ role: 'system', content: systemPrompt }] : []),
-      ...(memories.length ? [{ role: 'system', content: `Bot memory:\n${memories.join('\n')}` }] : []),
+      ...(knowledge.length ? [{ role: 'system', content: `Bot memory:\n${knowledge.join('\n')}` }] : []),
       ...session.messages.map(({ role, content }) => ({ role, content })),
       { role: 'user', content: prompt },
     ];

@@ -67,6 +67,20 @@ Command migration strategy (target ≈150–200 useful commands):
 
 Global rules: skip all 78 obfuscated files unless behavior is re-implemented cleanly; every ported command declares name/aliases/category/description/usage/role; aliases capped (~2–3 each); duplicate names rejected at registration (already enforced); any external API key must come from `.env`; rate-limit expensive commands. Realistic landing zone: ~150–180 commands.
 
+### Batch 2026-08-23 (latest) — deep audit fixes + integration tests
+
+End-to-end code trace found and fixed:
+- PREFIX/BOT_NAME/AI_MAX_HISTORY env vars were parsed but never wired into the app — now threaded through factory → dispatcher → commands.
+- Owner lockout on real WhatsApp: Baileys device-suffix JIDs (`23480…:12@s.whatsapp.net`) never matched OWNER_JIDS; all role matching now strips device suffixes.
+- Chatbot rate-limit budget was burned by ordinary chatter, and rate-limited mentions were dropped silently; now only explicit triggers cost budget and blocked users get a once-per-window notice.
+- WhatsApp renders mentions as "@DisplayName", not "@<number>" — mention stripping now removes leading @tokens on mention-triggered turns (bare "@bot" stays silent instead of leaking to the AI).
+- Pairing code is requested only after the WebSocket opens (Baileys rejects early requests); dead sockets drop all listeners on reconnect; logout cancels pending reconnects; Baileys gets a quiet logger (data/battery).
+- Command crashes now reply honestly ("Command X failed: …") instead of silence; status@broadcast never reaches the dispatcher.
+- `.train` knowledge is now GLOBAL bot knowledge (owner-authorized write), injected into every AI chat; capped at 200 entries per key.
+- Removed dead duplicate modules (message/context.js, message/trigger.js, permissions/check.js, commands/command.js).
+
+Verification: `npm run check` clean over all sources; 22/22 tests pass (was 9) including new dispatch suite covering unknown-command silence, permission denial for user/sudo/owner, device-suffix owner match, crash reporting, custom prefixes, registry duplicates/aliases, status filtering, .chatbot on/off flow with honest no-provider fallback, reply-to-bot trigger, bare-mention silence without rate cost, once-per-window rate notice, history/clear-h role scoping, global training delivered to providers via fake router.
+
 
 
 ---

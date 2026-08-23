@@ -104,14 +104,98 @@ test('connected screen reports identity without leaking credentials', () => {
   assert.doesNotMatch(screen, /private|key|creds/i);
 });
 
-test('online message is branded and lists quick-start commands once per process', () => {
-  const msg = ui.onlineMessage('NOVA_VOID MDX');
-  assert.match(msg, /NOVA_VOID MDX/);
-  assert.match(msg, /IS NOW ONLINE/);
-  for (const cmd of ['.ping', '.menu', '.status', '.chatbot on']) {
+test('online message is branded, honest, and lists quick-start commands', () => {
+  const msg = ui.onlineMessage('NOVA_VOID MDX', '.', 11);
+  assert.match(msg, /⚡ NOVA_VOID MDX ⚡/);
+  assert.match(msg, /SYSTEM ONLINE/);
+  assert.match(msg, /Commands : 11/);
+  assert.match(msg, /Prefix   : \./);
+  assert.doesNotMatch(msg, /AI (is )?(configured|connected)/i);
+  for (const cmd of ['.ping', '.menu', '.status']) {
     assert.ok(msg.includes(cmd), `missing ${cmd}`);
   }
 });
+
+// ---- message pipeline regressions (live-test failures) ----
+
+import { normalizeMessage, unwrapMessage } from '../src/core/message/normalize.js';
+import { bareJid, maskJid, isBroadcastChat } from '../src/core/jid.js';
+import { sendWithRetry } from '../src/core/send-retry.js';
+import { installLogGuard } from '../src/core/log-guard.js';
+
+test('bareJid strips device suffixes used by linked companions', () => {
+  assert.equal(bareJid('50932528446:6@s.whatsapp.net'), '50932528446@s.whatsapp.net');
+  assert.equal(bareJid('50932528446@s.whatsapp.net'), '50932528446@s.whatsapp.net');
+});
+
+test('maskJid never reveals a full number', () => {
+  const masked = maskJid('50932528446:6@s.whatsapp.net');
+  assert.ok(masked.includes('***'));
+  assert.ok(!masked.includes('50932528446'));
+});
+
+test('isBroadcastChat covers status and newsletter broadcast variants', () => {
+  assert.equal(isBroadcastChat('status@broadcast'), true);
+  assert.equal(isBroadcastChat('status@distributed'), true);
+  assert.equal(isBroadcastChat('123@newsletter'), false);
+  assert.equal(isBroadcastChat('50932528446@s.whatsapp.net'), false);
+});
+
+test('normalize unwraps ephemeral and view-once wrappers to reach text', () => {
+  const wrapped = {
+    key: { id: 'A', remoteJid: '50932528446@s.whatsapp.net', fromMe: true },
+    message: { ephemeralMessage: { message: { conversation: '.ping' } } },
+  };
+  assert.equal(normalizeMessage(wrapped).text, '.ping');
+
+  const viewOnce = {
+    key: { id: 'B', remoteJid: '50932528446@s.whatsapp.net' },
+    message: { viewOnceMessageV2: { message: { extendedTextMessage: { text: 'hello bot' } } } },
+  };
+  assert.equal(normalizeMessage(viewOnce).text, 'hello bot');
+  assert.deepEqual(unwrapMessage({ viewOnceMessage: { message: { conversation: 'x' } } }).wrapped, true);
+});
+
+test('normalize flags protocol/reaction noise', () => {
+  const proto = {
+    key: { id: 'C', remoteJid: '50932528446@s.whatsapp.net' },
+    message: { protocolMessage: { type: 0 } },
+  };
+  assert.equal(normalizeMessage(proto).isProtocol, true);
+});
+
+test('sendWithRetry succeeds once, retries failures, and throws only after all attempts', async () => {
+  let calls = 0;
+  const ok = await sendWithRetry(async () => { calls += 1; return 'sent'; }, { sleep: async () => {} });
+  assert.equal(ok, 'sent');
+  assert.equal(calls, 1);
+
+  let failures = 0;
+  await assert.rejects(
+    sendWithRetry(async () => { failures += 1; throw new Error(`boom ${failures}`); }, { attempts: 3, sleep: async () => {} })
+  );
+  assert.equal(failures, 3);
+});
+
+test('log guard suppresses libsignal session dumps but keeps normal logs', () => {
+  const lines = [];
+  const fake = {
+    info: (...a) => lines.push(['info', ...a]),
+    log: (...a) => lines.push(['log', ...a]),
+    debug: () => {},
+    warn: (...a) => lines.push(['warn', ...a]),
+    error: (...a) => lines.push(['error', ...a]),
+  };
+  const guard = installLogGuard(fake);
+  const secret = { type: 'SessionEntry', privKey: Buffer.alloc(32) };
+  fake.info('Closing session:', secret);
+  fake.info('normal operational line');
+  assert.equal(lines.length, 1);
+  assert.equal(guard.suppressed, 1);
+  assert.equal(lines[0][1], 'normal operational line');
+  guard.restore();
+});
+
 
 // ---- WA protocol version cache ----
 

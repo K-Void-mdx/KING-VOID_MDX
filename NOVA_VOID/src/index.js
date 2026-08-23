@@ -18,7 +18,14 @@ import {
 } from './core/connection-state.js';
 import { listCommands } from './core/commands/registry.js';
 import { loadWaVersion } from './core/version-cache.js';
+import { bareJid, maskJid } from './core/jid.js';
+import { sendWithRetry } from './core/send-retry.js';
+import { installLogGuard } from './core/log-guard.js';
 import * as ui from './ui/banner.js';
+
+// libsignal dumps raw session records via console.info — shield before ANY
+// Baileys code can run.
+installLogGuard();
 
 assertValidEnv();
 
@@ -41,7 +48,22 @@ export async function startNovaVoid() {
   let waVersion;
 
   const print = (...lines) => console.log(...lines);
-  const setMode = (mode) => print(`[ MODE ] ${mode}`);
+  const setMode = (label) => print(ui.log.mode(label));
+
+  // Safe pipeline diagnostics. Message contents are never printed.
+  const trace = (event, payload = {}) => {
+    if (event === 'message' && env.debugMessages) {
+      print(ui.log.message(maskJid(payload.senderJid), maskJid(payload.chatJid)));
+    }
+    if (event === 'dispatch') {
+      const name = payload.name ? `.${payload.name}` : '';
+      print(ui.log.command(name));
+    }
+    if (event === 'response') print(ui.log.response(true));
+    if (event === 'command-error') {
+      print(ui.log.error(`.${payload.command} failed: ${payload.error?.message ?? 'unknown'}`));
+    }
+  };
 
   async function askPairingNumber() {
     const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
@@ -74,7 +96,7 @@ export async function startNovaVoid() {
       sock.ev.off('connection.update', handler);
       clearTimeout(guard);
       try {
-        setMode('pairing');
+        setMode('Pairing');
         print(ui.log.authWait());
         const code = await sock.requestPairingCode(phone);
         print(ui.pairingCodeBox(formatPairingCode(code)));
@@ -126,10 +148,24 @@ export async function startNovaVoid() {
       return;
     }
 
+    if (verdict.action === 'restart') {
+      // 515 restart_required: server demands a FRESH socket promptly. Do not
+      // burn backoff attempts on it; single-flight timer still applies.
+      print(ui.log.restart());
+      setMode('Connecting');
+      if (!reconnectTimer) {
+        reconnectTimer = setTimeout(() => {
+          reconnectTimer = undefined;
+          connect().catch((error) => print(ui.log.error(error?.message ?? String(error))));
+        }, 500);
+      }
+      return;
+    }
+
     connectAttempt += 1;
     const delay = immediate ? 0 : nextBackoffMs(connectAttempt);
     print(ui.log.retry(delay, verdict.reason));
-    setMode('reconnecting');
+    setMode('Reconnecting');
     reconnectTimer = setTimeout(() => {
       reconnectTimer = undefined;
       connect().catch((error) => print(ui.log.error(error?.message ?? String(error))));
@@ -160,11 +196,18 @@ export async function startNovaVoid() {
         sessionsDir: join(env.dataDir, 'history'),
         memoryFile: join(env.dataDir, 'memory.json'),
       },
-      reply: (chatJid, text) => sock.sendMessage(chatJid, { text }),
-      sendMedia: (chatJid, media) => {
-        if (media.type !== 'image' || !media.buffer) throw new Error('Unsupported media payload');
-        return sock.sendMessage(chatJid, { image: media.buffer, caption: media.caption ?? '' });
+      reply: async (chatJid, text) => {
+        const sent = await sock.sendMessage(chatJid, { text });
+        application?.rememberOutbound(sent?.key?.id);
+        return sent;
       },
+      sendMedia: async (chatJid, media) => {
+        if (media.type !== 'image' || !media.buffer) throw new Error('Unsupported media payload');
+        const sent = await sock.sendMessage(chatJid, { image: media.buffer, caption: media.caption ?? '' });
+        application?.rememberOutbound(sent?.key?.id);
+        return sent;
+      },
+      trace,
     });
   }
 
@@ -179,13 +222,26 @@ export async function startNovaVoid() {
       seconds,
     }));
     print(ui.log.online(seconds));
-    setMode('online');
+    setMode('Online');
 
     if (!onlineSentThisProcess) {
-      onlineSentThisProcess = true;
-      // One branded startup message per process, to the linked account's own chat.
-      sock.sendMessage(sock.user.id, { text: ui.onlineMessage(env.botName) })
-        .catch((error) => print(ui.log.error(`startup message failed: ${error?.message ?? error}`)));
+      // Destination must be a BARE JID: sending to the device-suffixed
+      // sock.user.id ("…:6@s.whatsapp.net") silently fails.
+      const destination = bareJid(env.ownerJids[0] ?? '') || bareJid(sock.user?.id ?? '');
+      if (!destination) {
+        print(ui.log.error('no valid destination for startup message'));
+        return;
+      }
+      const body = ui.onlineMessage(env.botName, env.prefix, listCommands().length);
+      sendWithRetry((attempt) => {
+        print(`${ui.log.mode('Online')} startup message → ${maskJid(destination)} (attempt ${attempt})`);
+        return sock.sendMessage(destination, { text: body });
+      }, { attempts: 3, delayMs: 2000 })
+        .then(() => {
+          onlineSentThisProcess = true;
+          print(ui.log.response(true));
+        })
+        .catch((error) => print(ui.log.error(`startup message failed after retries: ${error?.message ?? error}`)));
     }
   }
 
@@ -247,7 +303,7 @@ export async function startNovaVoid() {
   print(ui.identityBlock());
   print(ui.titleCard());
   print('');
-  print('[ SYSTEM STARTING ]');
+  setMode('Starting');
   print('');
 
   await Promise.all([
@@ -267,7 +323,7 @@ export async function startNovaVoid() {
   const bootMode = decideStartMode(Boolean(peek.state.creds.registered));
 
   if (bootMode.mode === 'interactive') {
-    setMode('awaiting_number');
+    setMode('Awaiting authentication');
     print(ui.authRequiredScreen(env.pairingPhone || undefined));
     pairNumber = await askPairingNumber();
     print(ui.verifyingScreen(maskPhone(pairNumber)));

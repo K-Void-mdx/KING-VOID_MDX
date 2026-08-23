@@ -51,6 +51,7 @@ export const env = Object.freeze({
   authDir: resolvePath(process.env.AUTH_DIR, './data/auth'),
   dataDir: resolvePath(process.env.DATA_DIR, './data'),
   aiMaxHistory: Number(value(process.env.AI_MAX_HISTORY, '40')) || 40,
+  debugMessages: /^(1|true|yes)$/i.test(value(process.env.DEBUG_MESSAGES, '')),
 });
 
 export function assertValidEnv() {

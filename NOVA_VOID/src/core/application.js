@@ -7,6 +7,9 @@ import { handleChatbotMessage } from '../ai/chatbot-service.js';
 import { isChatbotTrigger, stripBotMention } from '../ai/chatbot.js';
 import { RateLimiter } from './rate-limit.js';
 import { normalizeJid } from './permissions/roles.js';
+import { isBroadcastChat } from './jid.js';
+
+const OUTBOUND_MEMORY = 500;
 
 export class NovaApplication {
   constructor({
@@ -22,6 +25,7 @@ export class NovaApplication {
     limiter,
     prefixes = ['.'],
     botName = 'NOVA_VOID MDX',
+    trace = () => {},
   }) {
     this.botJid = botJid;
     this.ownerJids = ownerJids;
@@ -35,6 +39,19 @@ export class NovaApplication {
     this.limiter = limiter ?? new RateLimiter({ windowMs: 15_000, max: 4 });
     this.prefixes = Array.isArray(prefixes) && prefixes.length ? prefixes : ['.'];
     this.botName = botName;
+    this.trace = trace;
+    // IDs of messages THIS bot sent, so the companion echo of our own replies
+    // is never re-dispatched. Owner-typed messages have fresh ids and pass.
+    this.outboundIds = new Set();
+  }
+
+  rememberOutbound(id) {
+    if (!id) return;
+    this.outboundIds.add(id);
+    if (this.outboundIds.size > OUTBOUND_MEMORY) {
+      const oldest = this.outboundIds.values().next().value;
+      this.outboundIds.delete(oldest);
+    }
   }
 
   register(commands) {
@@ -47,8 +64,19 @@ export class NovaApplication {
 
   async handle(raw) {
     const message = normalizeMessage(raw, { botJid: this.botJid });
-    if (!message.id || message.isFromBot) return { handled: false, reason: 'ignored' };
-    if (message.chatJid === 'status@broadcast') return { handled: false, reason: 'ignored-status' };
+    if (!message.id) return { handled: false, reason: 'ignored' };
+    if (isBroadcastChat(message.chatJid)) return { handled: false, reason: 'ignored-status' };
+    if (message.isProtocol) return { handled: false, reason: 'protocol' };
+
+    // This bot runs as a linked companion ON the owner's account, so
+    // owner-typed messages legitimately arrive with fromMe=true and MUST
+    // dispatch. Only the echo of our OWN sends is skipped — identified by
+    // message id, never by fromMe alone.
+    if (message.fromMe && this.outboundIds.has(message.id)) {
+      return { handled: false, reason: 'self-echo' };
+    }
+    if (!message.text) return { handled: false, reason: 'no-text' };
+    this.trace('message', message);
 
     const role = resolveRole({
       sender: message.senderJid,
@@ -60,13 +88,17 @@ export class NovaApplication {
     const parsed = parseCommand(message.text, this.prefixes);
     if (parsed) {
       const command = getCommand(parsed.name);
-      if (!command) return { handled: false, reason: 'unknown-command' };
+      if (!command) {
+        this.trace('unknown-command', { name: parsed.name });
+        return { handled: false, reason: 'unknown-command' };
+      }
       const requiredRole = command.role ?? 'user';
       if (!hasRole(role, requiredRole)) {
         await this.reply(message.chatJid, 'You do not have permission to use this command.');
         return { handled: true, type: 'permission-denied' };
       }
 
+      this.trace('dispatch', { name: parsed.name });
       try {
         await command.execute({
           message,
@@ -78,7 +110,9 @@ export class NovaApplication {
           reply: (text) => this.reply(message.chatJid, text),
           sendMedia: this.sendMedia ? (media) => this.sendMedia(message.chatJid, media) : undefined,
         });
+        this.trace('response', { command: parsed.name });
       } catch (error) {
+        this.trace('command-error', { command: parsed.name, error });
         await this.reply(
           message.chatJid,
           `Command "${parsed.name}" failed: ${error?.message ?? 'unknown error'}`

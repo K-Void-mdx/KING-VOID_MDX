@@ -242,3 +242,50 @@ test('owner training becomes global bot knowledge delivered to providers', async
   assert.match(systemBlob, /NOVA-77/);
   assert.equal(h.sent.at(-1).text, 'acknowledged');
 });
+
+// ---- owner-companion pipeline (live-test regression) ----
+
+test('owner commands typed on the linked phone (fromMe) now dispatch', async () => {
+  const h = harness();
+  const result = await h.app.handle({
+    key: { id: 'OWNERMSG1', remoteJid: `${OWNER.split('@')[0]}@s.whatsapp.net`, fromMe: true },
+    message: { conversation: '.ping' },
+  });
+  assert.equal(result.type, 'command');
+  assert.match(h.sent.at(-1).text, /is alive/i);
+});
+
+test("the bot's own sent messages are never re-dispatched as echoes", async () => {
+  const h = harness();
+  h.app.rememberOutbound('BOTSENT42');
+  const result = await h.app.handle({
+    key: { id: 'BOTSENT42', remoteJid: CHAT, fromMe: true },
+    message: { conversation: '.ping' },
+  });
+  assert.equal(result.reason, 'self-echo');
+  assert.equal(h.sent.length, 0);
+});
+
+test('ephemeral-wrapped owner command still reaches the dispatcher', async () => {
+  const h = harness();
+  const result = await h.app.handle({
+    key: { id: 'EPH1', remoteJid: `${OWNER.split('@')[0]}@s.whatsapp.net`, fromMe: true },
+    message: { ephemeralMessage: { message: { conversation: '.status' } } },
+  });
+  assert.equal(result.type, 'command');
+});
+
+test('protocol and reaction noise is ignored before dispatch', async () => {
+  const h = harness();
+  const proto = await h.app.handle({
+    key: { id: 'P1', remoteJid: CHAT, participant: USER },
+    message: { protocolMessage: { type: 3 } },
+  });
+  assert.equal(proto.reason, 'protocol');
+
+  const reaction = await h.app.handle({
+    key: { id: 'P2', remoteJid: CHAT, participant: USER },
+    message: { reactionMessage: { text: '👍' } },
+  });
+  assert.equal(reaction.reason, 'protocol');
+});

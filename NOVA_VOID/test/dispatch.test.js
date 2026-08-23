@@ -137,7 +137,7 @@ test('.chatbot on/off flow: mention triggers honest fallback, silence otherwise'
 
   const fallback = await h.app.handle(mention('@bot hello there'));
   assert.equal(fallback.type, 'chatbot');
-  assert.match(h.sent.at(-1).text, /not configured yet/);
+  assert.match(h.sent.at(-1).text, /No AI provider/);
 
   const off = await h.send('.chatbot off', OWNER);
   assert.match(off && h.sent.at(-1).text, /OFF/);
@@ -153,7 +153,7 @@ test('replying to a bot message triggers the chatbot too', async () => {
   await h.send('.chatbot on', OWNER);
   const result = await h.app.handle(replyToBot('swipe reply here'));
   assert.equal(result.type, 'chatbot');
-  assert.match(h.sent.at(-1).text, /not configured yet/);
+  assert.match(h.sent.at(-1).text, /No AI provider/);
 });
 
 test('bare mentions without text stay silent and cost no rate budget', async () => {
@@ -195,6 +195,28 @@ test('.ai without providers answers honestly; history respects roles and scoping
   const cleared = await h.send('.clear-h all', OWNER);
   assert.equal(cleared.type, 'command');
   assert.match(h.sent.at(-1).text, /Cleared/);
+});
+
+test('offline knowledge answers trained questions without any provider', async () => {
+  const h = harness();
+  await h.send('.train The NOVA server password is mango42', OWNER);
+  await h.send('.chatbot on', OWNER);
+  const result = await h.app.handle(mention('@bot what is the nova server password'));
+  assert.equal(result.type, 'chatbot');
+  assert.match(h.sent.at(-1).text, /knowledge base/i);
+  assert.match(h.sent.at(-1).text, /mango42/);
+
+  await h.send('.ai repeat the nova server password', SUDO);
+  assert.match(h.sent.at(-1).text, /mango42/);
+});
+
+test('unmatched offline questions honestly name the bot and its limits', async () => {
+  const h = harness();
+  await h.send('.chatbot on', OWNER);
+  const result = await h.app.handle(mention('@bot who won the football match yesterday'));
+  assert.equal(result.type, 'chatbot');
+  assert.match(h.sent.at(-1).text, /NOVA_VOID MDX/);
+  assert.match(h.sent.at(-1).text, /No AI provider/);
 });
 
 test('owner training becomes global bot knowledge delivered to providers', async () => {

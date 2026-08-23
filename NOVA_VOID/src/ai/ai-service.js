@@ -1,8 +1,19 @@
+import { findKnowledge } from './knowledge.js';
+
 export class AIService {
   constructor({ router, sessions, memory }) {
     this.router = router;
     this.sessions = sessions;
     this.memory = memory;
+  }
+
+  /**
+   * Best-effort answer from trained global knowledge when no provider exists.
+   * Returns { content } or null. Never fakes provider output.
+   */
+  answerFromKnowledge(prompt) {
+    const hit = findKnowledge(this.memory, prompt);
+    return hit ? { content: hit.record.content } : null;
   }
 
   async chat({ userJid, prompt, scope = 'private', provider, systemPrompt = '' }) {

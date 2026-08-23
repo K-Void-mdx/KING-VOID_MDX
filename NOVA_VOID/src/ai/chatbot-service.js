@@ -26,10 +26,18 @@ export async function handleChatbotMessage({ message, botJid, enabled, ai, reply
   } catch (error) {
     // The bot must always acknowledge an explicit mention — never stay silent.
     if (error instanceof AIProviderError && NOT_CONFIGURED.test(error.message)) {
-      await reply('My AI provider is not configured yet. The owner can connect one later.');
-    } else {
-      await reply("I couldn't process that right now. Please try again in a moment.");
+      const known = typeof ai.answerFromKnowledge === 'function' ? ai.answerFromKnowledge(prompt) : null;
+      if (known) {
+        await reply(`From my knowledge base:\n${known.content}`);
+        return true;
+      }
+      await reply(
+        'NOVA_VOID MDX here. No AI provider is connected yet, and my knowledge base has nothing on that. ' +
+        'The owner can connect a provider or teach me with .train.'
+      );
+      return true;
     }
+    await reply("I couldn't process that right now. Please try again in a moment.");
     return true;
   }
 

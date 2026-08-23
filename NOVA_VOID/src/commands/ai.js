@@ -20,7 +20,9 @@ export function createAICommands({ ai, sessions, memory, limiter }) {
           return ctx.reply(await ai.chat({ userJid: ctx.senderJid, prompt: ctx.argsText, scope: ctx.chatJid }));
         } catch (error) {
           if (error instanceof AIProviderError && NOT_CONFIGURED.test(error.message)) {
-            return ctx.reply('No AI provider is configured yet. Ask the owner to connect one.');
+            const known = typeof ai.answerFromKnowledge === 'function' ? ai.answerFromKnowledge(ctx.argsText) : null;
+            if (known) return ctx.reply(`From my knowledge base:\n${known.content}`);
+            return ctx.reply('No AI provider is configured yet, and my knowledge base has nothing on that. Ask the owner to connect one or use .train.');
           }
           return ctx.reply('The AI request failed. Please try again later.');
         }

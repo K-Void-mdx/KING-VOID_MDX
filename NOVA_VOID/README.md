@@ -50,7 +50,7 @@ Core:
 AI:
 
 - `.chatbot on|off` — per-chat chatbot toggle (owner)
-- `.ai <prompt>` — one-off AI request; honest error if no provider is configured
+- `.ai <prompt>` — one-off AI request; uses trained knowledge offline, honest error when neither provider nor knowledge matches
 - `.train <info>` — owner-only persistent knowledge
 - `.train-list` / `.train-remove <n>` — manage knowledge
 - `.history` — view your AI session history (owner/trusted)
@@ -58,6 +58,8 @@ AI:
 - `.generate <prompt>` — image generation when a provider is configured
 
 Chatbot triggers: direct @mention of the bot or a WhatsApp reply to a bot message. Ordinary messages are ignored.
+
+Offline mode: without a connected AI provider, NOVA_VOID MDX still answers questions it can match against owner-trained knowledge (labeled "From my knowledge base"); anything else gets an honest "no provider" reply — never fake intelligence.
 
 ## Status
 

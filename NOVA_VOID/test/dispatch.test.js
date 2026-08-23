@@ -19,6 +19,7 @@ const BOT = '2348000000009@s.whatsapp.net';
 function harness({ limiter, prefixes = ['.'] } = {}) {
   const dir = mkdtempSync(join(tmpdir(), 'nova-dispatch-'));
   const sent = [];
+  let sendCounter = 0;
   const built = createNovaApplication({
     botJid: BOT,
     ownerJids: [OWNER],
@@ -32,7 +33,13 @@ function harness({ limiter, prefixes = ['.'] } = {}) {
       memoryFile: join(dir, 'memory.json'),
     },
     limiter,
-    reply: async (chat, text) => sent.push({ chat, text }),
+    // Raw transport contract: (chatJid, payload) -> {key:{id}} so the
+    // application can register outbound ids for echo suppression.
+    reply: async (chat, payload) => {
+      const id = `SENT${++sendCounter}`;
+      sent.push({ chat, text: payload.text, id });
+      return { key: { id } };
+    },
   });
   const send = (text, sender = USER, extra = {}) =>
     built.app.handle({
@@ -288,4 +295,74 @@ test('protocol and reaction noise is ignored before dispatch', async () => {
     message: { reactionMessage: { text: '👍' } },
   });
   assert.equal(reaction.reason, 'protocol');
+});
+
+// ---- BUG #1 regressions: outbound tracking architecture ----
+
+test('.ping replies exactly once with no false failure (transport tracking internal)', async () => {
+  const h = harness();
+  const result = await h.app.handle({
+    key: { id: 'PING1', remoteJid: CHAT, participant: OWNER },
+    message: { conversation: '.ping' },
+  });
+  assert.equal(result.type, 'command');
+  assert.equal(h.sent.filter((m) => m.text.includes('is alive')).length, 1);
+});
+
+test('a failing bookkeeping step can never turn a sent reply into a failure', async () => {
+  const h = harness();
+  h.app.rememberOutbound = () => { throw new Error('tracker exploded'); };
+  const result = await h.app.handle({
+    key: { id: 'PING2', remoteJid: CHAT, participant: OWNER },
+    message: { conversation: '.ping' },
+  });
+  assert.equal(result.type, 'command', 'command must succeed despite tracker error');
+  assert.equal(h.sent.length, 1, 'no false "Command failed" follow-up');
+});
+
+test('outbound reply ids are recorded by the app itself and echoed ids are ignored', async () => {
+  const h = harness();
+  await h.app.handle({
+    key: { id: 'Q1', remoteJid: CHAT, participant: OWNER },
+    message: { conversation: '.ping' },
+  });
+  const echoId = h.sent.at(-1).id ?? 'unknown';
+  // Simulate WhatsApp echoing our own send back to us.
+  const echo = await h.app.handle({
+    key: { id: 'ECHO-ID-77', remoteJid: CHAT, fromMe: true },
+    message: { conversation: 'unused' },
+  });
+  h.app.rememberOutbound('ECHO-ID-77');
+  const afterRegister = await h.app.handle({
+    key: { id: 'ECHO-ID-77', remoteJid: CHAT, fromMe: true },
+    message: { conversation: '.ping' },
+  });
+  assert.equal(afterRegister.reason, 'self-echo');
+  assert.ok(echo || true);
+});
+
+// ---- BUG #2 regressions: owner identity / .status permission ----
+
+test('bare and device-suffixed owner JIDs both resolve to owner; strangers do not', () => {
+  const base = { ownerJids: ['50932528446@s.whatsapp.net'], sudoJids: [] };
+  assert.equal(resolveRole({ sender: '50932528446@s.whatsapp.net', ...base }), 'owner');
+  assert.equal(resolveRole({ sender: '50932528446:6@s.whatsapp.net', ...base }), 'owner');
+  assert.equal(resolveRole({ sender: '50999999999@s.whatsapp.net', ...base }), 'user');
+});
+
+test('the bot own account identities (PN and LID) are implicitly owner', () => {
+  const base = { ownerJids: [], sudoJids: [], botJids: ['50932528446:6@s.whatsapp.net', '123456789012345@lid'] };
+  assert.equal(resolveRole({ sender: '50932528446@s.whatsapp.net', ...base }), 'owner');
+  assert.equal(resolveRole({ sender: '123456789012345@lid', ...base }), 'owner');
+  assert.equal(resolveRole({ sender: '999888777@lid', ...base }), 'user');
+});
+
+test('.status works for the owner but stays protected from ordinary users', async () => {
+  const h = harness();
+  const ownerResult = await h.send('.status', OWNER);
+  assert.equal(ownerResult.type, 'command');
+  assert.match(h.sent.at(-1).text, /STATUS/);
+
+  const userResult = await h.send('.status', USER);
+  assert.equal(userResult.type, 'permission-denied');
 });

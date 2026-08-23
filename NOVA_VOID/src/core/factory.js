@@ -18,6 +18,7 @@ import { createCoreCommands } from '../commands/core.js';
  */
 export function createNovaApplication({
   botJid,
+  botLid,
   ownerJids = [],
   sudoJids = [],
   reply,
@@ -29,6 +30,7 @@ export function createNovaApplication({
   prefixes = ['.'],
   botName = 'NOVA_VOID MDX',
   maxHistory = 40,
+  trace,
 }) {
   const sessions = new AISessionStore({
     maxMessages: Math.max(1, Number(maxHistory) || 40),
@@ -41,17 +43,19 @@ export function createNovaApplication({
   const chatbot = new ChatbotState({ filePath: storage.chatbotStateFile });
   const app = new NovaApplication({
     botJid,
+    botLid,
     ownerJids,
     sudoJids,
     ai,
     sessions,
     memory,
     chatbot,
-    reply,
+    send: reply,
     sendMedia,
     limiter: limiter ?? new RateLimiter({ windowMs: 15_000, max: 4 }),
     prefixes,
     botName,
+    trace,
   });
 
   clearCommands();

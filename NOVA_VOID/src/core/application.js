@@ -14,6 +14,7 @@ const OUTBOUND_MEMORY = 500;
 export class NovaApplication {
   constructor({
     botJid,
+    botLid,
     ownerJids = [],
     sudoJids = [],
     ai,
@@ -21,6 +22,7 @@ export class NovaApplication {
     memory,
     reply,
     sendMedia,
+    send,
     chatbot,
     limiter,
     prefixes = ['.'],
@@ -28,13 +30,29 @@ export class NovaApplication {
     trace = () => {},
   }) {
     this.botJid = botJid;
+    // Linked companions may be addressed through WhatsApp's alternate LID
+    // identity; both forms belong to the same owner account.
+    this.botLid = botLid;
     this.ownerJids = ownerJids;
     this.sudoJids = sudoJids;
     this.ai = ai;
     this.sessions = sessions;
     this.memory = memory;
-    this.reply = reply;
-    this.sendMedia = sendMedia;
+    // ONE transport + ONE tracking owner. NovaApplication wraps the raw
+    // transport so every outbound message is echo-registered here, never at
+    // call sites — a tracking failure must never fail a command.
+    this.transportSend = send ?? reply;
+    if (typeof this.transportSend !== 'function') {
+      throw new Error('NovaApplication requires a send/reply transport');
+    }
+    this.transportSendMedia = typeof sendMedia === 'function' ? sendMedia : undefined;
+    this.sendMedia = this.transportSendMedia
+      ? async (chatJid, media) => {
+          const sent = await this.transportSendMedia(chatJid, media);
+          this.trackOutbound(sent);
+          return sent;
+        }
+      : undefined;
     this.chatbot = chatbot ?? new ChatbotState();
     this.limiter = limiter ?? new RateLimiter({ windowMs: 15_000, max: 4 });
     this.prefixes = Array.isArray(prefixes) && prefixes.length ? prefixes : ['.'];
@@ -43,6 +61,24 @@ export class NovaApplication {
     // IDs of messages THIS bot sent, so the companion echo of our own replies
     // is never re-dispatched. Owner-typed messages have fresh ids and pass.
     this.outboundIds = new Set();
+  }
+
+  /** Raw send, wrapped with guaranteed outbound tracking. */
+  async reply(chatJid, text) {
+    const sent = await this.transportSend(chatJid, { text });
+    this.trackOutbound(sent);
+    return sent;
+  }
+
+  trackOutbound(sent) {
+    try {
+      const id = sent?.key?.id;
+      if (!id) return;
+      this.rememberOutbound(id);
+    } catch (error) {
+      // Bookkeeping must never break message flow.
+      try { this.trace('track-error', { error }); } catch { /* ignore */ }
+    }
   }
 
   rememberOutbound(id) {
@@ -83,6 +119,7 @@ export class NovaApplication {
       ownerJids: this.ownerJids,
       sudoJids: this.sudoJids,
       isGroupAdmin: Boolean(raw.isGroupAdmin),
+      botJids: [this.botJid, this.botLid],
     });
 
     const parsed = parseCommand(message.text, this.prefixes);
@@ -111,8 +148,7 @@ export class NovaApplication {
           sendMedia: this.sendMedia ? (media) => this.sendMedia(message.chatJid, media) : undefined,
         });
         this.trace('response', { command: parsed.name });
-      } catch (error) {
-        this.trace('command-error', { command: parsed.name, error });
+      } catch (error) {        this.trace('command-error', { command: parsed.name, error });
         await this.reply(
           message.chatJid,
           `Command "${parsed.name}" failed: ${error?.message ?? 'unknown error'}`

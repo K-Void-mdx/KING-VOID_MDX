@@ -53,8 +53,8 @@ export function novaBanner() {
 export function identityBlock() {
   return [
     '',
-    paint('magenta', '              NOVA'),
-    paint('magenta', '        VOID  -  MDX'),
+    paint('cyan', '              NOVA'),
+    paint('blue', '        VOID  -  ') + paint('magenta', 'MDX'),
     '',
   ].join('\n');
 }

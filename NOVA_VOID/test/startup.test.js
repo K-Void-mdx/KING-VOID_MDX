@@ -82,12 +82,14 @@ test('online notifier fires exactly once no matter how often called', () => {
 // ---- startup UI ----
 
 test('banner art spells NOVA VOID MDX correctly', () => {
-  const banner = ui.novaBanner();
+  const plain = (s) => s.replace(/\x1b\[[0-9;]*m/g, '');
+  const banner = plain(ui.novaBanner());
+  const identity = plain(ui.identityBlock());
   assert.match(banner, /██╗   ██╗/); // V column present
   assert.equal(banner.split('\n').length, 20); // 3 blocks of 6 rows + 2 blank separators
-  assert.match(ui.identityBlock(), /NOVA/);
-  assert.match(ui.identityBlock(), /VOID  -  MDX/);
-  assert.match(ui.titleCard(), /NOVA_VOID MDX v3\.0/);
+  assert.match(identity, /NOVA/);
+  assert.match(identity, /VOID  -  MDX/);
+  assert.match(plain(ui.titleCard()), /NOVA_VOID MDX v3\.0/);
 });
 
 test('pairing box renders the code exactly as delivered by WhatsApp', () => {
@@ -244,4 +246,27 @@ test('loadWaVersion prefers cache, fetches once when stale, falls back on failur
   });
   assert.equal(failed.version, undefined);
   assert.equal(failed.source, 'fallback');
+});
+
+// ---- online notification dedup gate ----
+
+import { createOnlineGate } from '../src/core/online-gate.js';
+
+test('online gate allows exactly one send cycle and never re-sends after success', () => {
+  const gate = createOnlineGate();
+  assert.equal(gate.state, 'idle');
+  assert.equal(gate.begin(), true, 'first open may send');
+  assert.equal(gate.begin(), false, 'concurrent open must not duplicate');
+  assert.equal(gate.begin(), false);
+  gate.success();
+  assert.equal(gate.state, 'sent');
+  assert.equal(gate.begin(), false, 'no resend after confirmed success');
+});
+
+test('online gate returns to idle after a fully failed cycle so a healthy retry can happen', () => {
+  const gate = createOnlineGate();
+  gate.begin();
+  gate.failure();
+  assert.equal(gate.state, 'idle');
+  assert.equal(gate.begin(), true);
 });

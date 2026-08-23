@@ -21,6 +21,7 @@ import { loadWaVersion } from './core/version-cache.js';
 import { bareJid, maskJid } from './core/jid.js';
 import { sendWithRetry } from './core/send-retry.js';
 import { installLogGuard } from './core/log-guard.js';
+import { createOnlineGate } from './core/online-gate.js';
 import * as ui from './ui/banner.js';
 
 // libsignal dumps raw session records via console.info — shield before ANY
@@ -45,6 +46,7 @@ export async function startNovaVoid() {
   let shuttingDown = false;
   let pairNumber;
   let onlineSentThisProcess = false;
+  const onlineGate = createOnlineGate();
   let waVersion;
 
   const print = (...lines) => console.log(...lines);
@@ -184,8 +186,9 @@ export async function startNovaVoid() {
   }
 
   async function buildApplication(sock) {
-    application = createNovaApplication({
+    const bundle = createNovaApplication({
       botJid: sock.user?.id,
+      botLid: sock.user?.lid,
       ownerJids: env.ownerJids,
       sudoJids: env.sudoJids,
       botName: env.botName,
@@ -196,19 +199,17 @@ export async function startNovaVoid() {
         sessionsDir: join(env.dataDir, 'history'),
         memoryFile: join(env.dataDir, 'memory.json'),
       },
-      reply: async (chatJid, text) => {
-        const sent = await sock.sendMessage(chatJid, { text });
-        application?.rememberOutbound(sent?.key?.id);
-        return sent;
-      },
+      // Raw transports only — NovaApplication owns echo tracking internally,
+      // so a bookkeeping failure can never turn a successful reply into a
+      // "command failed" report.
+      reply: (chatJid, { text }) => sock.sendMessage(chatJid, { text }),
       sendMedia: async (chatJid, media) => {
         if (media.type !== 'image' || !media.buffer) throw new Error('Unsupported media payload');
-        const sent = await sock.sendMessage(chatJid, { image: media.buffer, caption: media.caption ?? '' });
-        application?.rememberOutbound(sent?.key?.id);
-        return sent;
+        return sock.sendMessage(chatJid, { image: media.buffer, caption: media.caption ?? '' });
       },
       trace,
     });
+    application = bundle.app;
   }
 
   async function onOpen(sock, connectedAt) {
@@ -224,25 +225,39 @@ export async function startNovaVoid() {
     print(ui.log.online(seconds));
     setMode('Online');
 
-    if (!onlineSentThisProcess) {
-      // Destination must be a BARE JID: sending to the device-suffixed
-      // sock.user.id ("…:6@s.whatsapp.net") silently fails.
-      const destination = bareJid(env.ownerJids[0] ?? '') || bareJid(sock.user?.id ?? '');
-      if (!destination) {
-        print(ui.log.error('no valid destination for startup message'));
-        return;
-      }
-      const body = ui.onlineMessage(env.botName, env.prefix, listCommands().length);
-      sendWithRetry((attempt) => {
-        print(`${ui.log.mode('Online')} startup message → ${maskJid(destination)} (attempt ${attempt})`);
-        return sock.sendMessage(destination, { text: body });
-      }, { attempts: 3, delayMs: 2000 })
-        .then(() => {
-          onlineSentThisProcess = true;
-          print(ui.log.response(true));
-        })
-        .catch((error) => print(ui.log.error(`startup message failed after retries: ${error?.message ?? error}`)));
+    maybeSendOnlineMessage(sock);
+  }
+
+  /**
+   * Sends the startup card exactly once per process. The gate transitions
+   * idle → sending → sent, so concurrent opens (e.g. a 515 restart racing
+   * the first send) can never produce duplicates; a fully failed cycle
+   * returns to idle so a later healthy connection may retry.
+   */
+  function maybeSendOnlineMessage(sock) {
+    if (!onlineGate.begin()) return;
+
+    const destination = bareJid(env.ownerJids[0] ?? '') || bareJid(sock.user?.id ?? '');
+    if (!destination) {
+      print(ui.log.error('no valid destination for startup message'));
+      onlineGate.failure();
+      return;
     }
+    const body = ui.onlineMessage(env.botName, env.prefix, listCommands().length);
+    sendWithRetry((attempt) => {
+      print(`${ui.log.mode('Online')} startup message → ${maskJid(destination)} (attempt ${attempt})`);
+      return sock.sendMessage(destination, { text: body });
+    }, { attempts: 3, delayMs: 2000 })
+      .then((sent) => {
+        application?.trackOutbound(sent);
+        onlineGate.success();
+        onlineSentThisProcess = true;
+        print(ui.log.response(true));
+      })
+      .catch((error) => {
+        onlineGate.failure();
+        print(ui.log.error(`startup message failed after retries: ${error?.message ?? error}`));
+      });
   }
 
   async function connect() {
@@ -284,7 +299,7 @@ export async function startNovaVoid() {
       if (type !== 'notify' || !application) return;
       for (const message of messages) {
         try {
-          await application.app.handle(message);
+          await application.handle(message);
         } catch (error) {
           print(ui.log.error(`message handling failed: ${error?.message ?? error}`));
         }

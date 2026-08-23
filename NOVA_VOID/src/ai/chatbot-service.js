@@ -1,5 +1,6 @@
 import { isChatbotTrigger, stripBotMention } from './chatbot.js';
 import { AIProviderError } from './provider.js';
+import * as wa from '../ui/wa-style.js';
 
 const NOT_CONFIGURED = /no ai providers are configured/i;
 
@@ -28,16 +29,14 @@ export async function handleChatbotMessage({ message, botJid, enabled, ai, reply
     if (error instanceof AIProviderError && NOT_CONFIGURED.test(error.message)) {
       const known = typeof ai.answerFromKnowledge === 'function' ? ai.answerFromKnowledge(prompt) : null;
       if (known) {
-        await reply(`From my knowledge base:\n${known.content}`);
+        await reply(wa.knowledgeAnswer(known.content));
         return true;
       }
-      await reply(
-        'NOVA_VOID MDX here. No AI provider is connected yet, and my knowledge base has nothing on that. ' +
-        'The owner can connect a provider or teach me with .train.'
-      );
+      await reply(wa.aiNotConfigured());
       return true;
     }
-    await reply("I couldn't process that right now. Please try again in a moment.");
+    console.error(`[CHATBOT] provider error: ${error?.message ?? error}`);
+    await reply([wa.header(), '', '🔴 *_SYSTEM BUSY_*', '', 'I could not process that just now. Please try again in a moment.', '', wa.footer()].join('\n'));
     return true;
   }
 

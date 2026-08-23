@@ -1,4 +1,5 @@
 import { listCommands } from '../core/commands/registry.js';
+import * as wa from '../ui/wa-style.js';
 
 /**
  * Tier-1 core commands: ping, status, menu.
@@ -11,22 +12,48 @@ export function createCoreCommands({ app, botName = 'NOVA_VOID MDX', prefix = '.
       description: 'Check that the bot is alive.',
       async execute(ctx) {
         const uptime = formatUptime(process.uptime());
-        return ctx.reply(`*${botName}* is alive.\nUptime: ${uptime}`);
+        return ctx.reply(
+          [
+            wa.header(botName),
+            '',
+            '🟢 *_SYSTEM RESPONSE_*',
+            '',
+            `*_${botName}_* is *_alive_*.`,
+            '',
+            wa.section('STATUS'),
+            wa.row('Uptime', uptime),
+            wa.row('Connection', 'ONLINE'),
+            wa.sectionEnd(),
+            '',
+            '⚡ `PONG`',
+          ].join('\n')
+        );
       },
     },
     {
       name: 'status',
       category: 'core',
       role: 'sudo',
+      usage: '.status',
       description: 'Bot runtime status (owner/trusted).',
       async execute(ctx) {
+        const chatbotOn = app.chatbot.list().length > 0 ? 'ON' : 'OFF';
         const lines = [
-          `*${botName} — STATUS*`,
-          `Uptime: ${formatUptime(process.uptime())}`,
-          `Chatbot chats: ${app.chatbot.list().length}`,
-          `AI sessions in memory: ${app.sessions.size()}`,
-          `Node: ${process.version}`,
-          `Memory: ${Math.round(process.memoryUsage().rss / 1024 / 1024)} MB RSS`,
+          wa.header(botName),
+          '',
+          '📡 *_SYSTEM STATUS_*',
+          '',
+          wa.section(botName),
+          wa.row('Status', 'ONLINE'),
+          wa.row('Owner', 'OWNER'),
+          wa.row('Prefix', prefix),
+          wa.row('Commands', String(listCommands().length)),
+          wa.row('Uptime', formatUptime(process.uptime())),
+          wa.row('Chatbot', chatbotOn),
+          wa.row('Memory', `${Math.round(process.memoryUsage().rss / 1024 / 1024)} MB`),
+          wa.sectionEnd(),
+          '',
+          wa.footer(botName),
         ];
         return ctx.reply(lines.join('\n'));
       },
@@ -44,15 +71,22 @@ export function createCoreCommands({ app, botName = 'NOVA_VOID MDX', prefix = '.
           if (!byCategory.has(category)) byCategory.set(category, []);
           byCategory.get(category).push(command);
         }
-        const sections = [`*${botName} — MENU*`];
+        const icons = { ai: '🧠', core: '🛠️', misc: '🛠️' };
+        const sections = [wa.header(`${botName} — MENU`), ''];
         for (const [category, items] of [...byCategory.entries()].sort()) {
-          sections.push(`\n*${category.toUpperCase()}*`);
+          sections.push(`${icons[category] ?? '🛠️'} *_${category.toUpperCase()}_*`);
           for (const item of items) {
-            const usage = item.usage ? ` — ${item.usage}` : '';
-            sections.push(`• ${prefix}${item.name}${usage}`);
+            const usage = item.usage ? ` ${item.usage.replace(/^\.\S*/, '')}` : '';
+            sections.push(`\`${prefix}${item.name}${usage}\``);
           }
+          sections.push('');
         }
-        sections.push(`\nTotal: ${commands.length} commands`);
+        sections.push(wa.section('SYSTEM'));
+        sections.push(wa.row('Total Commands', String(commands.length)));
+        sections.push(wa.row('Prefix', prefix));
+        sections.push(wa.sectionEnd());
+        sections.push('');
+        sections.push(wa.footer(botName));
         return ctx.reply(sections.join('\n'));
       },
     },

@@ -103,7 +103,9 @@ test('command crash reports honestly instead of staying silent', async () => {
   registerCommand({ name: 'explode', execute() { throw new Error('boom'); } });
   const result = await h.send('.explode', USER);
   assert.equal(result.type, 'command-error');
-  assert.match(h.sent.at(-1).text, /boom/);
+  // Clean card for users — internal error text must never leak.
+  assert.match(h.sent.at(-1).text, /COMMAND ERROR/);
+  assert.doesNotMatch(h.sent.at(-1).text, /boom/);
   clearCommands();
 });
 
@@ -144,7 +146,7 @@ test('.chatbot on/off flow: mention triggers honest fallback, silence otherwise'
 
   const fallback = await h.app.handle(mention('@bot hello there'));
   assert.equal(fallback.type, 'chatbot');
-  assert.match(h.sent.at(-1).text, /No AI provider/);
+  assert.match(h.sent.at(-1).text, /No external AI provider/);
 
   const off = await h.send('.chatbot off', OWNER);
   assert.match(off && h.sent.at(-1).text, /OFF/);
@@ -160,7 +162,7 @@ test('replying to a bot message triggers the chatbot too', async () => {
   await h.send('.chatbot on', OWNER);
   const result = await h.app.handle(replyToBot('swipe reply here'));
   assert.equal(result.type, 'chatbot');
-  assert.match(h.sent.at(-1).text, /No AI provider/);
+  assert.match(h.sent.at(-1).text, /No external AI provider/);
 });
 
 test('bare mentions without text stay silent and cost no rate budget', async () => {
@@ -188,20 +190,21 @@ test('rate-limited mentions warn once per window instead of silence', async () =
 test('.ai without providers answers honestly; history respects roles and scoping', async () => {
   const h = harness();
   const ai = await h.send('.ai what is love', SUDO);
-  assert.match(h.sent.at(-1).text, /No AI provider is configured/);
+  assert.match(h.sent.at(-1).text, /AI NOT CONFIGURED/);
   assert.equal(ai.type, 'command');
 
   const deniedHistory = await h.send('.history', USER);
   assert.equal(deniedHistory.type, 'permission-denied');
 
   await h.send('.history', SUDO);
-  assert.match(h.sent.at(-1).text, /No AI conversation history|AI history/);
+  assert.match(h.sent.at(-1).text, /No conversation history|AI HISTORY/);
 
   await h.send('.clear-h all', USER);
-  assert.match(h.sent.at(-1).text, /Owner only/);
+  assert.match(h.sent.at(-1).text, /ACCESS RESTRICTED/);
+  assert.match(h.sent.at(-1).text, /Required Role.*OWNER/);
   const cleared = await h.send('.clear-h all', OWNER);
   assert.equal(cleared.type, 'command');
-  assert.match(h.sent.at(-1).text, /Cleared/);
+  assert.match(h.sent.at(-1).text, /HISTORY CLEARED/);
 });
 
 test('offline knowledge answers trained questions without any provider', async () => {
@@ -223,14 +226,14 @@ test('unmatched offline questions honestly name the bot and its limits', async (
   const result = await h.app.handle(mention('@bot who won the football match yesterday'));
   assert.equal(result.type, 'chatbot');
   assert.match(h.sent.at(-1).text, /NOVA_VOID MDX/);
-  assert.match(h.sent.at(-1).text, /No AI provider/);
+  assert.match(h.sent.at(-1).text, /No external AI provider/);
 });
 
 test('owner training becomes global bot knowledge delivered to providers', async () => {
   const h = harness();
   assert.equal((await h.send('.train The launch code is NOVA-77', USER)).type, 'permission-denied');
   await h.send('.train The launch code is NOVA-77', OWNER);
-  assert.match(h.sent.at(-1).text, /Learned/);
+  assert.match(h.sent.at(-1).text, /TRAINED/);
   await h.send('.train-list', OWNER);
   assert.match(h.sent.at(-1).text, /NOVA-77/);
 
@@ -259,7 +262,7 @@ test('owner commands typed on the linked phone (fromMe) now dispatch', async () 
     message: { conversation: '.ping' },
   });
   assert.equal(result.type, 'command');
-  assert.match(h.sent.at(-1).text, /is alive/i);
+  assert.match(h.sent.at(-1).text, /PONG/);
 });
 
 test("the bot's own sent messages are never re-dispatched as echoes", async () => {
@@ -306,7 +309,7 @@ test('.ping replies exactly once with no false failure (transport tracking inter
     message: { conversation: '.ping' },
   });
   assert.equal(result.type, 'command');
-  assert.equal(h.sent.filter((m) => m.text.includes('is alive')).length, 1);
+  assert.equal(h.sent.filter((m) => m.text.includes('PONG')).length, 1);
 });
 
 test('a failing bookkeeping step can never turn a sent reply into a failure', async () => {
@@ -365,4 +368,42 @@ test('.status works for the owner but stays protected from ordinary users', asyn
 
   const userResult = await h.send('.status', USER);
   assert.equal(userResult.type, 'permission-denied');
+});
+
+test('owner identity matrix: every JID form of the owner number passes sudo-tier commands', async () => {
+  const h = harness();
+  // Device-suffixed, bare-number and plain forms all normalize to the owner.
+  for (const form of ['50932528446@s.whatsapp.net', '50932528446:6@s.whatsapp.net', '50932528446']) {
+    const result = await h.send('.status', form);
+    assert.equal(result.type, 'command', `form ${form} should pass`);
+    assert.match(h.sent.at(-1).text, /SYSTEM STATUS/);
+  }
+});
+
+test('fromMe messages are always owner-tier even with an unrecognizable sender JID', async () => {
+  const h = harness();
+  const result = await h.send('.status', '100000000000000000@s.whatsapp.net', { key: undefined });
+  // Direct handle with fromMe=true and a sender that matches no configured list.
+  const res = await h.app.handle({
+    key: { id: 'fm1', remoteJid: CHAT, fromMe: true },
+    message: { conversation: '.status' },
+  });
+  assert.equal(res.type, 'command');
+  assert.match(h.sent.at(-1).text, /SYSTEM STATUS/);
+});
+
+test('resolveRole unit matrix for the pinned developer number', () => {
+  const owners = ['50932528446@s.whatsapp.net'];
+  assert.equal(resolveRole({ sender: '50932528446@s.whatsapp.net', ownerJids: owners }), 'owner');
+  assert.equal(resolveRole({ sender: '50932528446:6@s.whatsapp.net', ownerJids: owners }), 'owner');
+  assert.equal(resolveRole({ sender: '50932528446', ownerJids: owners }), 'owner');
+  assert.equal(resolveRole({ sender: 'anything@lid', ownerJids: owners, fromMe: true }), 'owner');
+  assert.equal(resolveRole({ sender: USER, ownerJids: owners }), 'user');
+});
+
+test('regular users still cannot reach sudo-tier commands', async () => {
+  const h = harness();
+  const denied = await h.send('.status', USER);
+  assert.equal(denied.type, 'permission-denied');
+  assert.match(h.sent.at(-1).text, /ACCESS RESTRICTED/);
 });

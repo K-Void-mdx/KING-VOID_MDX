@@ -1,4 +1,5 @@
 import { AIProviderError } from '../ai/provider.js';
+import * as wa from '../ui/wa-style.js';
 
 const NOT_CONFIGURED = /no ai providers are configured/i;
 
@@ -10,21 +11,27 @@ export function createAICommands({ ai, sessions, memory, limiter }) {
       category: 'ai',
       usage: '.ai <question>',
       async execute(ctx) {
-        if (!ctx.argsText) return ctx.reply('Usage: .ai <question>');
+        if (!ctx.argsText) {
+          return ctx.reply(
+            ['⚠️ *_USAGE_*', '', '`' + wa.row('Command', '.ai <question>') + '`.'].join('\n')
+          );
+        }
         const limitKey = `cmd:ai:${ctx.senderJid}`;
         if (limiter && !limiter.allow(limitKey)) {
           const seconds = Math.ceil(limiter.msUntilAllowed(limitKey) / 1000);
-          return ctx.reply(`Please wait ${seconds}s before asking again.`);
+          return ctx.reply(wa.rateLimited().replace('COOLDOWN', `${seconds}s`));
         }
         try {
           return ctx.reply(await ai.chat({ userJid: ctx.senderJid, prompt: ctx.argsText, scope: ctx.chatJid }));
         } catch (error) {
           if (error instanceof AIProviderError && NOT_CONFIGURED.test(error.message)) {
             const known = typeof ai.answerFromKnowledge === 'function' ? ai.answerFromKnowledge(ctx.argsText) : null;
-            if (known) return ctx.reply(`From my knowledge base:\n${known.content}`);
-            return ctx.reply('No AI provider is configured yet, and my knowledge base has nothing on that. Ask the owner to connect one or use .train.');
+            if (known) return ctx.reply(wa.knowledgeAnswer(known.content));
+            return ctx.reply(wa.aiNotConfigured());
           }
-          return ctx.reply('The AI request failed. Please try again later.');
+          // Real provider failure: log safely in Termux, clean card for users.
+          console.error(`[AI] provider error: ${error?.message ?? error}`);
+          return ctx.reply(wa.aiNotConfigured());
         }
       },
     },
@@ -37,9 +44,35 @@ export function createAICommands({ ai, sessions, memory, limiter }) {
       description: 'Show your current AI session history (owner/trusted).',
       async execute(ctx) {
         const history = sessions.history(ctx.senderJid, ctx.chatJid);
-        if (!history.length) return ctx.reply('No AI conversation history for this session.');
-        const lines = history.map((item, index) => `${index + 1}. ${item.role}: ${item.content}`).join('\n');
-        return ctx.reply(`AI history (${history.length}):\n${lines}`);
+        if (!history.length) {
+          return ctx.reply(
+            [
+              wa.header(),
+              '',
+              '🧠 *_AI HISTORY_*',
+              '',
+              'No conversation history in this session yet.',
+              '',
+              wa.footer(),
+            ].join('\n')
+          );
+        }
+        const lines = history.map((item, index) => `\`${index + 1}.\` *${item.role}*: ${item.content}`).join('\n');
+        return ctx.reply(
+          [
+            wa.header(),
+            '',
+            '🧠 *_AI HISTORY_*',
+            '',
+            wa.section('SESSION'),
+            wa.row('Messages', String(history.length)),
+            wa.sectionEnd(),
+            '',
+            lines,
+            '',
+            wa.footer(),
+          ].join('\n')
+        );
       },
     },
     {
@@ -49,12 +82,28 @@ export function createAICommands({ ai, sessions, memory, limiter }) {
       usage: '.clear-h [all]',
       async execute(ctx) {
         if (ctx.args?.[0] === 'all') {
-          if (!hasOwnerRole(ctx.role)) return ctx.reply('Owner only.');
+          if (ctx.role !== 'owner') {
+            return ctx.reply(wa.accessDenied('clear-h all', 'owner'));
+          }
           const count = sessions.clearAll();
-          return ctx.reply(`Cleared ${count} AI sessions.`);
+          return ctx.reply(
+            [
+              wa.header(),
+              '',
+              '🛠️ *_HISTORY CLEARED_*',
+              '',
+              wa.section('RESULT'),
+              wa.row('Sessions cleared', String(count)),
+              wa.sectionEnd(),
+              '',
+              wa.footer(),
+            ].join('\n')
+          );
         }
         sessions.clear(ctx.senderJid, ctx.chatJid);
-        return ctx.reply('Your AI conversation history has been cleared.');
+        return ctx.reply(
+          [wa.header(), '', '🛠️ *_HISTORY CLEARED_*', '', 'Your session history is now empty.', '', wa.footer()].join('\n')
+        );
       },
     },
     {
@@ -65,9 +114,26 @@ export function createAICommands({ ai, sessions, memory, limiter }) {
       usage: '.train <information>',
       description: 'Teach NOVA_VOID knowledge every chat can use.',
       async execute(ctx) {
-        if (!ctx.argsText) return ctx.reply('Usage: .train <information>');
+        if (!ctx.argsText) {
+          return ctx.reply(['⚠️ *_USAGE_*', '', '`.train <information>`', '', wa.footer()].join('\n'));
+        }
         memory.add('*', ctx.argsText, { scope: 'global' });
-        return ctx.reply('Learned and stored in NOVA_VOID memory.');
+        return ctx.reply(
+          [
+            wa.header(),
+            '',
+            '🧠 *_TRAINED_*',
+            '',
+            'Knowledge stored in NOVA_VOID global memory.',
+            '',
+            wa.section('ENTRY'),
+            wa.row('Scope', 'GLOBAL'),
+            wa.row('Size', String(memory.listAll('global').length)),
+            wa.sectionEnd(),
+            '',
+            wa.footer(),
+          ].join('\n')
+        );
       },
     },
     {
@@ -78,8 +144,15 @@ export function createAICommands({ ai, sessions, memory, limiter }) {
       description: 'List stored training memory.',
       async execute(ctx) {
         const records = memory.listAll('global');
-        if (!records.length) return ctx.reply('NOVA_VOID has no stored training memory yet.');
-        return ctx.reply(records.map((item, index) => `${index + 1}. ${item.content}`).join('\n'));
+        if (!records.length) {
+          return ctx.reply(
+            [wa.header(), '', '🧠 *_KNOWLEDGE BASE EMPTY_*', '', 'Use `.train <information>` to teach the bot.', '', wa.footer()].join('\n')
+          );
+        }
+        const lines = records.map((item, index) => `\`${index + 1}.\` ${item.content}`).join('\n');
+        return ctx.reply(
+          [wa.header(), '', '🧠 *_KNOWLEDGE BASE_*', '', lines, '', wa.row('Total', String(records.length)), '', wa.footer()].join('\n')
+        );
       },
     },
     {
@@ -91,14 +164,12 @@ export function createAICommands({ ai, sessions, memory, limiter }) {
       async execute(ctx) {
         const index = Number(ctx.args?.[0]);
         const records = memory.listAll('global');
-        if (!Number.isInteger(index) || index < 1 || index > records.length) return ctx.reply('Usage: .train-remove <number>');
+        if (!Number.isInteger(index) || index < 1 || index > records.length) {
+          return ctx.reply(['⚠️ *_USAGE_*', '', '`.train-remove <number>`', '', wa.footer()].join('\n'));
+        }
         memory.remove('*', records[index - 1].id, 'global');
-        return ctx.reply('Training memory removed.');
+        return ctx.reply([wa.header(), '', '🧠 *_MEMORY REMOVED_*', '', `\`#${index}\` deleted.`, '', wa.footer()].join('\n'));
       },
     },
   ];
-}
-
-function hasOwnerRole(role) {
-  return role === 'owner';
 }

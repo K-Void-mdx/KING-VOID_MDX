@@ -108,13 +108,13 @@ test('connected screen reports identity without leaking credentials', () => {
 
 test('online message is branded, honest, and lists quick-start commands', () => {
   const msg = ui.onlineMessage('NOVA_VOID MDX', '.', 11);
-  assert.match(msg, /⚡ NOVA_VOID MDX ⚡/);
+  assert.match(msg, /⚡ \*_NOVA_VOID MDX_\* ⚡/);
   assert.match(msg, /SYSTEM ONLINE/);
-  assert.match(msg, /Commands : 11/);
-  assert.match(msg, /Prefix   : \./);
+  assert.match(msg, /Status.*: `ONLINE`/);
+  assert.match(msg, /Prefix.*: `\.`/);
   assert.doesNotMatch(msg, /AI (is )?(configured|connected)/i);
   for (const cmd of ['.ping', '.menu', '.status']) {
-    assert.ok(msg.includes(cmd), `missing ${cmd}`);
+    assert.ok(msg.includes(`\`${cmd}\``), `missing ${cmd}`);
   }
 });
 

@@ -1,3 +1,5 @@
+import * as wa from '../ui/wa-style.js';
+
 export function createChatbotCommand({ state }) {
   return {
     name: 'chatbot',
@@ -7,11 +9,30 @@ export function createChatbotCommand({ state }) {
     description: 'Toggle AI chatbot mode for this chat.',
     async execute(ctx) {
       const mode = String(ctx.args?.[0] ?? '').toLowerCase();
-      if (!['on', 'off'].includes(mode)) return ctx.reply('Usage: .chatbot on|off');
+      if (!['on', 'off'].includes(mode)) {
+        return ctx.reply(['⚠️ *_USAGE_*', '', '`.chatbot on|off`', '', wa.footer()].join('\n'));
+      }
       state.set(ctx.chatJid, mode === 'on');
+      if (mode === 'on') {
+        return ctx.reply(
+          [
+            wa.header(),
+            '',
+            '🟢 *_CHATBOT ENABLED_*',
+            '',
+            `💬 *_${wa.BOT}_* will now respond when:`,
+            '`• Mentioned`',
+            '`• Replied to`',
+            '`• Triggered according to chatbot rules`',
+            '',
+            wa.row('Status', 'ON'),
+            '',
+            wa.footer(),
+          ].join('\n')
+        );
+      }
       return ctx.reply(
-        `NOVA_VOID chatbot is now ${mode.toUpperCase()} for this chat.\n` +
-        'It responds only to direct mentions and replies to the bot.'
+        [wa.header(), '', '🔴 *_CHATBOT DISABLED_*', '', wa.row('Status', 'OFF'), '', 'Normal messages will remain silent.', '', wa.footer()].join('\n')
       );
     },
   };

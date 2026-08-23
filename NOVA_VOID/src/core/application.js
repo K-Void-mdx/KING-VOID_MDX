@@ -8,6 +8,7 @@ import { isChatbotTrigger, stripBotMention } from '../ai/chatbot.js';
 import { RateLimiter } from './rate-limit.js';
 import { normalizeJid } from './permissions/roles.js';
 import { isBroadcastChat } from './jid.js';
+import * as waStyle from '../ui/wa-style.js';
 
 const OUTBOUND_MEMORY = 500;
 
@@ -120,6 +121,7 @@ export class NovaApplication {
       sudoJids: this.sudoJids,
       isGroupAdmin: Boolean(raw.isGroupAdmin),
       botJids: [this.botJid, this.botLid],
+      fromMe: message.fromMe,
     });
 
     const parsed = parseCommand(message.text, this.prefixes);
@@ -131,8 +133,8 @@ export class NovaApplication {
       }
       const requiredRole = command.role ?? 'user';
       if (!hasRole(role, requiredRole)) {
-        await this.reply(message.chatJid, 'You do not have permission to use this command.');
-        return { handled: true, type: 'permission-denied' };
+        await this.reply(message.chatJid, waStyle.accessDenied(parsed.name, requiredRole));
+        return { handled: true, type: 'permission-denied', role, requiredRole };
       }
 
       this.trace('dispatch', { name: parsed.name });
@@ -148,11 +150,11 @@ export class NovaApplication {
           sendMedia: this.sendMedia ? (media) => this.sendMedia(message.chatJid, media) : undefined,
         });
         this.trace('response', { command: parsed.name });
-      } catch (error) {        this.trace('command-error', { command: parsed.name, error });
-        await this.reply(
-          message.chatJid,
-          `Command "${parsed.name}" failed: ${error?.message ?? 'unknown error'}`
-        );
+      } catch (error) {
+        // Real details stay in Termux logs; users get a clean card with no
+        // internal error text.
+        this.trace('command-error', { command: parsed.name, error });
+        await this.reply(message.chatJid, waStyle.commandError(parsed.name));
         return { handled: true, type: 'command-error', error };
       }
       return { handled: true, type: 'command', command: parsed.name };
@@ -172,7 +174,7 @@ export class NovaApplication {
         // Notify at most once per window so spam cannot turn into echo spam.
         const notifyKey = `notify:${limitKey}`;
         if (this.limiter.allow(notifyKey)) {
-          await this.reply(message.chatJid, 'You are messaging NOVA_VOID too quickly. Please slow down a little.');
+          await this.reply(message.chatJid, waStyle.rateLimited());
         }
         return { handled: true, type: 'rate-limited' };
       }

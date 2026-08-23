@@ -34,7 +34,13 @@ export function normalizeMessage(raw = {}, { botJid = '' } = {}) {
   return {
     id: key.id ?? raw.id ?? null,
     chatJid: key.remoteJid ?? raw.chatJid ?? null,
-    senderJid: key.participant ?? raw.senderJid ?? raw.sender ?? key.remoteJid ?? null,
+    senderJid:
+      key.participant ??
+      key.senderPn ??
+      raw.senderJid ??
+      raw.sender ??
+      key.remoteJid ??
+      null,
     fromMe: Boolean(key.fromMe ?? raw.fromMe),
     text: extractText(message),
     mentionedJids,

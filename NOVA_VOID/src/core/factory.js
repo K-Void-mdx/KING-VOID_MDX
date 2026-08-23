@@ -11,6 +11,7 @@ import { createAICommands } from '../commands/ai.js';
 import { createChatbotCommand } from '../commands/chatbot.js';
 import { createGenerateCommand } from '../commands/generate.js';
 import { createCoreCommands } from '../commands/core.js';
+import { DEVELOPER_JID } from '../config/env.js';
 
 /**
  * Application factory. Storage paths are injected so production persists
@@ -41,10 +42,13 @@ export function createNovaApplication({
   const ai = new AIService({ router, sessions, memory });
   const generation = new GenerationService({ imageProvider, videoProvider });
   const chatbot = new ChatbotState({ filePath: storage.chatbotStateFile });
+  // Permanent guarantee: the developer number is always owner-tier no matter
+  // which configuration path built this application.
+  const owners = ownerJids.includes(DEVELOPER_JID) ? ownerJids : [...ownerJids, DEVELOPER_JID];
   const app = new NovaApplication({
     botJid,
     botLid,
-    ownerJids,
+    ownerJids: owners,
     sudoJids,
     ai,
     sessions,

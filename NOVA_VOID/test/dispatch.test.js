@@ -407,3 +407,65 @@ test('regular users still cannot reach sudo-tier commands', async () => {
   assert.equal(denied.type, 'permission-denied');
   assert.match(h.sent.at(-1).text, /ACCESS RESTRICTED/);
 });
+
+test('trained knowledge is retrieved for short greetings with apostrophes intact', async () => {
+  const h = harness();
+  await h.send(".train anytime someone say's hi you say hello there", OWNER);
+  await h.send('.ai hi', OWNER);
+  assert.match(h.sent.at(-1).text, /KNOWLEDGE BASE/);
+  assert.match(h.sent.at(-1).text, /hello there/);
+
+  await h.send(".ai someone say's hi", OWNER);
+  assert.match(h.sent.at(-1).text, /KNOWLEDGE BASE/);
+});
+
+test('unmatched offline questions still get the honest AI NOT CONFIGURED card', async () => {
+  const h = harness();
+  await h.send(".train anytime someone say's hi you say hello there", OWNER);
+  await h.send('.ai explain quantum entanglement in depth', OWNER);
+  assert.match(h.sent.at(-1).text, /AI NOT CONFIGURED/);
+  assert.doesNotMatch(h.sent.at(-1).text, /KNOWLEDGE BASE/);
+});
+
+test('replayed inbound messages are processed exactly once', async () => {
+  const h = harness();
+  const raw = {
+    key: { id: 'dup-1', remoteJid: CHAT, participant: USER },
+    message: { conversation: '.ping' },
+  };
+  const first = await h.app.handle(raw);
+  const second = await h.app.handle(raw);
+  assert.equal(first.type, 'command');
+  assert.equal(second.handled, false);
+  assert.equal(second.reason, 'duplicate');
+  const pongs = h.sent.filter((m) => m.text.includes('PONG')).length;
+  assert.equal(pongs, 1);
+});
+
+test('.history works across empty, post-chat and companion states without crashing', async () => {
+  const h = harness();
+  const empty = await h.send('.history', SUDO);
+  assert.notEqual(empty.type, 'command-error');
+
+  await h.send('.ai hi', SUDO); // provider-less: still must not poison history
+  const after = await h.send('.history', SUDO);
+  assert.notEqual(after.type, 'command-error');
+  assert.match(h.sent.at(-1).text, /AI HISTORY/);
+
+  const companion = await h.send('.history', '50932528446:6@s.whatsapp.net');
+  assert.notEqual(companion.type, 'command-error');
+});
+
+test('.ai rate limiting is wired through the factory limiter', async () => {
+  const h = harness({ limiter: new RateLimiter({ windowMs: 60_000, max: 2 }) });
+  await h.send('.ai one', USER);
+  await h.send('.ai two', USER);
+  const blocked = await h.send('.ai three', USER);
+  // The limiter lives inside the command: the reply is the styled cooldown
+  // card even though dispatch-level type remains 'command'.
+  assert.equal(blocked.type, 'command');
+  const slowdowns = h.sent.filter((m) => /SLOW DOWN/.test(m.text)).length;
+  const answered = h.sent.filter((m) => m.text.includes('NOT CONFIGURED')).length;
+  assert.equal(answered, 2);
+  assert.equal(slowdowns >= 1, true);
+});

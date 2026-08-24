@@ -11,6 +11,7 @@ import { isBroadcastChat } from './jid.js';
 import * as waStyle from '../ui/wa-style.js';
 
 const OUTBOUND_MEMORY = 500;
+const SEEN_MEMORY = 800;
 
 export class NovaApplication {
   constructor({
@@ -62,6 +63,9 @@ export class NovaApplication {
     // IDs of messages THIS bot sent, so the companion echo of our own replies
     // is never re-dispatched. Owner-typed messages have fresh ids and pass.
     this.outboundIds = new Set();
+    // IDs of INBOUND messages already processed — Baileys can replay the same
+    // message after a reconnect, which must never double-fire a command.
+    this.seenIds = new Set();
   }
 
   /** Raw send, wrapped with guaranteed outbound tracking. */
@@ -111,6 +115,14 @@ export class NovaApplication {
     // message id, never by fromMe alone.
     if (message.fromMe && this.outboundIds.has(message.id)) {
       return { handled: false, reason: 'self-echo' };
+    }
+    if (this.seenIds.has(message.id)) {
+      return { handled: false, reason: 'duplicate' };
+    }
+    this.seenIds.add(message.id);
+    if (this.seenIds.size > SEEN_MEMORY) {
+      const oldest = this.seenIds.values().next().value;
+      this.seenIds.delete(oldest);
     }
     if (!message.text) return { handled: false, reason: 'no-text' };
     this.trace('message', message);

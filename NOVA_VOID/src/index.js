@@ -63,7 +63,9 @@ export async function startNovaVoid() {
     }
     if (event === 'response') print(ui.log.response(true));
     if (event === 'command-error') {
-      print(ui.log.error(`.${payload.command} failed: ${payload.error?.message ?? 'unknown'}`));
+      // Full detail stays in Termux only — never on WhatsApp.
+      const stack = payload.error?.stack?.split('\n')[1]?.trim() ?? '';
+      print(ui.log.error(`.${payload.command} failed: ${payload.error?.name ?? 'Error'}: ${payload.error?.message ?? 'unknown'}${stack ? ` (${stack})` : ''}`));
     }
   };
 

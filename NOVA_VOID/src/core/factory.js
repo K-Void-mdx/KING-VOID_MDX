@@ -64,7 +64,7 @@ export function createNovaApplication({
 
   clearCommands();
   app.register(createCoreCommands({ app, botName, prefix: Array.isArray(prefixes) ? prefixes[0] : '.' }));
-  app.register(createAICommands({ ai, sessions, memory }));
+  app.register(createAICommands({ ai, sessions, memory, limiter: app.limiter }));
   app.register(createChatbotCommand({ state: app.chatbot }));
   app.register(createGenerateCommand({ generation }));
   return { app, router, sessions, memory, ai, generation, chatbot };

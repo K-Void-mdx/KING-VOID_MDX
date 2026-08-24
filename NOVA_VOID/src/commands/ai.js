@@ -1,7 +1,6 @@
 import { AIProviderError } from '../ai/provider.js';
 import * as wa from '../ui/wa-style.js';
 
-const NOT_CONFIGURED = /no ai providers are configured/i;
 
 export function createAICommands({ ai, sessions, memory, limiter }) {
   return [
@@ -24,13 +23,15 @@ export function createAICommands({ ai, sessions, memory, limiter }) {
         try {
           return ctx.reply(await ai.chat({ userJid: ctx.senderJid, prompt: ctx.argsText, scope: ctx.chatJid }));
         } catch (error) {
-          if (error instanceof AIProviderError && NOT_CONFIGURED.test(error.message)) {
-            const known = typeof ai.answerFromKnowledge === 'function' ? ai.answerFromKnowledge(ctx.argsText) : null;
-            if (known) return ctx.reply(wa.knowledgeAnswer(known.content));
-            return ctx.reply(wa.aiNotConfigured());
+          // Priority chain: real provider → trained knowledge → honest card.
+          // Applies to "not configured", provider crashes and exhausted
+          // quotas alike — the bot never invents an answer either way.
+          const known = typeof ai.answerFromKnowledge === 'function' ? ai.answerFromKnowledge(ctx.argsText) : null;
+          if (known) return ctx.reply(wa.knowledgeAnswer(known.content));
+          if (!(error instanceof AIProviderError)) {
+            // Real unexpected failure: log safely in Termux, clean card for users.
+            console.error(`[AI] provider error: ${error?.message ?? error}`);
           }
-          // Real provider failure: log safely in Termux, clean card for users.
-          console.error(`[AI] provider error: ${error?.message ?? error}`);
           return ctx.reply(wa.aiNotConfigured());
         }
       },

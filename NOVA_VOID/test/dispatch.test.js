@@ -469,3 +469,36 @@ test('.ai rate limiting is wired through the factory limiter', async () => {
   assert.equal(answered, 2);
   assert.equal(slowdowns >= 1, true);
 });
+
+test('priority chain holds when a provider exists but fails: knowledge then honest card', async () => {
+  const h = harness();
+  clearCommands();
+  registerCommand({ name: 'noop', execute: async () => {} });
+  clearCommands();
+  // Rebuild with a router that always fails (simulates quota exhaustion).
+  const dir = mkdtempSync(join(tmpdir(), 'nova-quota-'));
+  const sent2 = [];
+  let n = 0;
+  const built = createNovaApplication({
+    botJid: BOT,
+    ownerJids: [OWNER],
+    storage: {
+      chatbotStateFile: join(dir, 'c.json'),
+      sessionsDir: join(dir, 'h'),
+      memoryFile: join(dir, 'm.json'),
+    },
+    reply: async (chat, payload) => { const r = { key: { id: `Q${++n}` }, text: payload.text }; sent2.push(r); return r; },
+  });
+  built.router.register({
+    name: 'broken',
+    async generateText() { throw new (await import('../src/ai/provider.js')).AIProviderError('quota exhausted'); },
+  });
+  const send2 = (text) => built.app.handle({ key: { id: text + ++n, remoteJid: CHAT, participant: OWNER }, message: { conversation: text } });
+
+  await send2('.train say hi back with hello there');
+  await send2('.ai hi');
+  assert.match(sent2.at(-1).text, /KNOWLEDGE BASE/);
+
+  await send2('.ai totally unknown topic xyz');
+  assert.match(sent2.at(-1).text, /AI NOT CONFIGURED/);
+});

@@ -2,7 +2,6 @@ import { isChatbotTrigger, stripBotMention } from './chatbot.js';
 import { AIProviderError } from './provider.js';
 import * as wa from '../ui/wa-style.js';
 
-const NOT_CONFIGURED = /no ai providers are configured/i;
 
 /**
  * Handles one potential chatbot turn.
@@ -25,18 +24,17 @@ export async function handleChatbotMessage({ message, botJid, enabled, ai, reply
       prompt,
     });
   } catch (error) {
-    // The bot must always acknowledge an explicit mention — never stay silent.
-    if (error instanceof AIProviderError && NOT_CONFIGURED.test(error.message)) {
-      const known = typeof ai.answerFromKnowledge === 'function' ? ai.answerFromKnowledge(prompt) : null;
-      if (known) {
-        await reply(wa.knowledgeAnswer(known.content));
-        return true;
-      }
-      await reply(wa.aiNotConfigured());
+    // Priority chain: real provider → trained knowledge → honest card — for
+    // not-configured, crashed and quota-exhausted providers alike.
+    const known = typeof ai.answerFromKnowledge === 'function' ? ai.answerFromKnowledge(prompt) : null;
+    if (known) {
+      await reply(wa.knowledgeAnswer(known.content));
       return true;
     }
-    console.error(`[CHATBOT] provider error: ${error?.message ?? error}`);
-    await reply([wa.header(), '', '🔴 *_SYSTEM BUSY_*', '', 'I could not process that just now. Please try again in a moment.', '', wa.footer()].join('\n'));
+    if (!(error instanceof AIProviderError)) {
+      console.error(`[CHATBOT] provider error: ${error?.message ?? error}`);
+    }
+    await reply([wa.header(), '', '🧠 *_AI NOT CONFIGURED_*', '', 'No external AI provider is available right now.', '', wa.row('Status', 'OFFLINE FALLBACK'), '', wa.footer()].join('\n'));
     return true;
   }
 

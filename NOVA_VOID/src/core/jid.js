@@ -12,7 +12,7 @@ export function isBroadcastChat(chatJid = '') {
   return jid === 'status@broadcast' || jid === 'status@distributed' || jid.endsWith('@broadcast');
 }
 
-/** Masks a JID for safe terminal logs: "50932528446@s…" -> "5093***8446@s.whatsapp.net". */
+/** Masks a JID for safe terminal logs: "2347046855205@s…" -> "5093***8446@s.whatsapp.net". */
 export function maskJid(jid = '') {
   const bare = bareJid(jid);
   const [local = '', server = ''] = bare.split('@');

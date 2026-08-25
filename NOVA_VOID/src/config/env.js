@@ -43,7 +43,11 @@ function resolvePath(input, fallback) {
 
 // Permanent developer/owner of NOVA_VOID MDX. Always granted the highest
 // role regardless of what else is configured in OWNER_JIDS.
-const DEVELOPER_NUMBER = '50932528446';
+// NOTE: this is the CONFIGURED permanent owner. It is architecturally
+// separate from the linked WhatsApp bot account (see PAIR_PHONE / sock.user):
+// the linked account gets companion privileges only because it IS the bot's
+// own device session — never through this pin.
+const DEVELOPER_NUMBER = '2347046855205';
 const DEVELOPER_JID = `${DEVELOPER_NUMBER}@s.whatsapp.net`;
 export { DEVELOPER_JID };
 

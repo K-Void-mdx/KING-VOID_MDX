@@ -1,6 +1,6 @@
 /**
  * Phone number normalization/validation for interactive pairing.
- * Accepts formats like "+509 3252-8446", "(234) 801-234-5678", "50932528446".
+ * Accepts formats like "+234 704 685 5205", "(234) 801-234-5678", "2347046855205".
  */
 export function normalizePhone(input, fallback = '') {
   const raw = input == null ? '' : String(input).trim();
@@ -19,7 +19,7 @@ export function normalizePhone(input, fallback = '') {
   return { ok: true, phone: digits };
 }
 
-/** "50932528446" -> "*******8446" for safe display. */
+/** "2347046855205" -> "*******8446" for safe display. */
 export function maskPhone(phone = '') {
   const digits = String(phone);
   if (digits.length <= 4) return '*'.repeat(digits.length);

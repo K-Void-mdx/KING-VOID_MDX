@@ -13,15 +13,15 @@ import * as ui from '../src/ui/banner.js';
 // ---- phone normalization ----
 
 test('normalizePhone strips formatting, +, and whitespace', () => {
-  assert.equal(normalizePhone('+509 3252-8446').phone, '50932528446');
+  assert.equal(normalizePhone('+234 704 685 5205').phone, '2347046855205');
   assert.equal(normalizePhone('(234) 801-234-5678').phone, '2348012345678');
   assert.equal(normalizePhone('  1 555 010 2030 ').phone, '15550102030');
 });
 
 test('normalizePhone falls back to the configured default on empty input', () => {
-  const result = normalizePhone('', '50932528446');
+  const result = normalizePhone('', '2347046855205');
   assert.ok(result.ok);
-  assert.equal(result.phone, '50932528446');
+  assert.equal(result.phone, '2347046855205');
 });
 
 test('normalizePhone rejects garbage, short numbers, and empty-with-no-default', () => {
@@ -32,7 +32,7 @@ test('normalizePhone rejects garbage, short numbers, and empty-with-no-default',
 });
 
 test('maskPhone only ever reveals the last four digits', () => {
-  assert.equal(maskPhone('50932528446'), '*******8446');
+  assert.equal(maskPhone('2347046855205'), '*********5205');
   assert.equal(maskPhone('1234'), '****');
 });
 
@@ -126,32 +126,32 @@ import { sendWithRetry } from '../src/core/send-retry.js';
 import { installLogGuard } from '../src/core/log-guard.js';
 
 test('bareJid strips device suffixes used by linked companions', () => {
-  assert.equal(bareJid('50932528446:6@s.whatsapp.net'), '50932528446@s.whatsapp.net');
-  assert.equal(bareJid('50932528446@s.whatsapp.net'), '50932528446@s.whatsapp.net');
+  assert.equal(bareJid('2347046855205:6@s.whatsapp.net'), '2347046855205@s.whatsapp.net');
+  assert.equal(bareJid('2347046855205@s.whatsapp.net'), '2347046855205@s.whatsapp.net');
 });
 
 test('maskJid never reveals a full number', () => {
-  const masked = maskJid('50932528446:6@s.whatsapp.net');
+  const masked = maskJid('2347046855205:6@s.whatsapp.net');
   assert.ok(masked.includes('***'));
-  assert.ok(!masked.includes('50932528446'));
+  assert.ok(!masked.includes('2347046855205'));
 });
 
 test('isBroadcastChat covers status and newsletter broadcast variants', () => {
   assert.equal(isBroadcastChat('status@broadcast'), true);
   assert.equal(isBroadcastChat('status@distributed'), true);
   assert.equal(isBroadcastChat('123@newsletter'), false);
-  assert.equal(isBroadcastChat('50932528446@s.whatsapp.net'), false);
+  assert.equal(isBroadcastChat('2347046855205@s.whatsapp.net'), false);
 });
 
 test('normalize unwraps ephemeral and view-once wrappers to reach text', () => {
   const wrapped = {
-    key: { id: 'A', remoteJid: '50932528446@s.whatsapp.net', fromMe: true },
+    key: { id: 'A', remoteJid: '2347046855205@s.whatsapp.net', fromMe: true },
     message: { ephemeralMessage: { message: { conversation: '.ping' } } },
   };
   assert.equal(normalizeMessage(wrapped).text, '.ping');
 
   const viewOnce = {
-    key: { id: 'B', remoteJid: '50932528446@s.whatsapp.net' },
+    key: { id: 'B', remoteJid: '2347046855205@s.whatsapp.net' },
     message: { viewOnceMessageV2: { message: { extendedTextMessage: { text: 'hello bot' } } } },
   };
   assert.equal(normalizeMessage(viewOnce).text, 'hello bot');
@@ -160,7 +160,7 @@ test('normalize unwraps ephemeral and view-once wrappers to reach text', () => {
 
 test('normalize flags protocol/reaction noise', () => {
   const proto = {
-    key: { id: 'C', remoteJid: '50932528446@s.whatsapp.net' },
+    key: { id: 'C', remoteJid: '2347046855205@s.whatsapp.net' },
     message: { protocolMessage: { type: 0 } },
   };
   assert.equal(normalizeMessage(proto).isProtocol, true);

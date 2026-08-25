@@ -347,15 +347,15 @@ test('outbound reply ids are recorded by the app itself and echoed ids are ignor
 // ---- BUG #2 regressions: owner identity / .status permission ----
 
 test('bare and device-suffixed owner JIDs both resolve to owner; strangers do not', () => {
-  const base = { ownerJids: ['50932528446@s.whatsapp.net'], sudoJids: [] };
-  assert.equal(resolveRole({ sender: '50932528446@s.whatsapp.net', ...base }), 'owner');
-  assert.equal(resolveRole({ sender: '50932528446:6@s.whatsapp.net', ...base }), 'owner');
+  const base = { ownerJids: ['2347046855205@s.whatsapp.net'], sudoJids: [] };
+  assert.equal(resolveRole({ sender: '2347046855205@s.whatsapp.net', ...base }), 'owner');
+  assert.equal(resolveRole({ sender: '2347046855205:6@s.whatsapp.net', ...base }), 'owner');
   assert.equal(resolveRole({ sender: '50999999999@s.whatsapp.net', ...base }), 'user');
 });
 
 test('the bot own account identities (PN and LID) are implicitly owner', () => {
-  const base = { ownerJids: [], sudoJids: [], botJids: ['50932528446:6@s.whatsapp.net', '123456789012345@lid'] };
-  assert.equal(resolveRole({ sender: '50932528446@s.whatsapp.net', ...base }), 'owner');
+  const base = { ownerJids: [], sudoJids: [], botJids: ['2347046855205:6@s.whatsapp.net', '123456789012345@lid'] };
+  assert.equal(resolveRole({ sender: '2347046855205@s.whatsapp.net', ...base }), 'owner');
   assert.equal(resolveRole({ sender: '123456789012345@lid', ...base }), 'owner');
   assert.equal(resolveRole({ sender: '999888777@lid', ...base }), 'user');
 });
@@ -373,7 +373,7 @@ test('.status works for the owner but stays protected from ordinary users', asyn
 test('owner identity matrix: every JID form of the owner number passes sudo-tier commands', async () => {
   const h = harness();
   // Device-suffixed, bare-number and plain forms all normalize to the owner.
-  for (const form of ['50932528446@s.whatsapp.net', '50932528446:6@s.whatsapp.net', '50932528446']) {
+  for (const form of ['2347046855205@s.whatsapp.net', '2347046855205:6@s.whatsapp.net', '2347046855205']) {
     const result = await h.send('.status', form);
     assert.equal(result.type, 'command', `form ${form} should pass`);
     assert.match(h.sent.at(-1).text, /SYSTEM STATUS/);
@@ -393,10 +393,10 @@ test('fromMe messages are always owner-tier even with an unrecognizable sender J
 });
 
 test('resolveRole unit matrix for the pinned developer number', () => {
-  const owners = ['50932528446@s.whatsapp.net'];
-  assert.equal(resolveRole({ sender: '50932528446@s.whatsapp.net', ownerJids: owners }), 'owner');
-  assert.equal(resolveRole({ sender: '50932528446:6@s.whatsapp.net', ownerJids: owners }), 'owner');
-  assert.equal(resolveRole({ sender: '50932528446', ownerJids: owners }), 'owner');
+  const owners = ['2347046855205@s.whatsapp.net'];
+  assert.equal(resolveRole({ sender: '2347046855205@s.whatsapp.net', ownerJids: owners }), 'owner');
+  assert.equal(resolveRole({ sender: '2347046855205:6@s.whatsapp.net', ownerJids: owners }), 'owner');
+  assert.equal(resolveRole({ sender: '2347046855205', ownerJids: owners }), 'owner');
   assert.equal(resolveRole({ sender: 'anything@lid', ownerJids: owners, fromMe: true }), 'owner');
   assert.equal(resolveRole({ sender: USER, ownerJids: owners }), 'user');
 });
@@ -452,7 +452,7 @@ test('.history works across empty, post-chat and companion states without crashi
   assert.notEqual(after.type, 'command-error');
   assert.match(h.sent.at(-1).text, /AI HISTORY/);
 
-  const companion = await h.send('.history', '50932528446:6@s.whatsapp.net');
+  const companion = await h.send('.history', '2347046855205:6@s.whatsapp.net');
   assert.notEqual(companion.type, 'command-error');
 });
 
@@ -501,4 +501,82 @@ test('priority chain holds when a provider exists but fails: knowledge then hone
 
   await send2('.ai totally unknown topic xyz');
   assert.match(sent2.at(-1).text, /AI NOT CONFIGURED/);
+});
+
+// ─── Owner migration regression (2347046855205) ────────────────────────────
+
+const NEW_OWNER = '2347046855205@s.whatsapp.net';
+const OLD_OWNER = '50932528446@s.whatsapp.net';
+
+test('new configured owner passes every owner-only gate in all JID forms', async () => {
+  const h = harness();
+  const forms = [NEW_OWNER, '2347046855205:6@s.whatsapp.net', '2347046855205'];
+  for (const form of forms) {
+    assert.equal((await h.send('.status', form)).type, 'command', `.status ${form}`);
+    assert.equal((await h.send('.chatbot off', form)).type, 'command', `.chatbot ${form}`);
+    assert.equal((await h.send('.train x marks the spot', form)).type, 'command', `.train ${form}`);
+    assert.equal((await h.send('.history', form)).type, 'command', `.history ${form}`);
+    assert.equal((await h.send('.clear-h', form)).type, 'command', `.clear-h ${form}`);
+  }
+});
+
+test('old number has NO configured permanent owner authority left', () => {
+  // Even if some stale config listed it, nothing in the code pins it:
+  const base = { ownerJids: [NEW_OWNER], sudoJids: [], botJids: [] };
+  assert.equal(resolveRole({ sender: OLD_OWNER, ...base }), 'user');
+  assert.equal(resolveRole({ sender: '50932528446:6@s.whatsapp.net', ...base }), 'user');
+  assert.equal(resolveRole({ sender: '50932528446', ...base }), 'user');
+});
+
+test('old account retains ONLY live linked-companion semantics (fromMe on its own session), not configured authority', async () => {
+  // As the currently-linked bot device, its own typed messages must still
+  // dispatch (companion mode) — this is session-derived, NOT configuration.
+  const h = harness();
+  const res = await h.app.handle({
+    key: { id: 'comp-1', remoteJid: CHAT, fromMe: true },
+    message: { conversation: '.status' },
+  });
+  assert.equal(res.type, 'command');
+  assert.match(h.sent.at(-1).text, /SYSTEM STATUS/);
+  // ...but it holds no sudo/owner standing for OTHER senders' checks.
+  const h2 = harness();
+  assert.equal((await h2.send('.status', OLD_OWNER)).type, 'permission-denied');
+});
+
+test('factory pin now grants the NEW developer number even with empty config', () => {
+  clearCommands();
+  const built = createNovaApplication({
+    botJid: BOT,
+    ownerJids: [],
+    storage: {},
+    reply: async () => ({ key: { id: 'x' } }),
+  });
+  assert.deepEqual(built.app.ownerJids, [NEW_OWNER]);
+});
+
+test('chatbot ON/OFF cards include section borders and footer', async () => {
+  const h = harness();
+  await h.send('.chatbot on', OWNER);
+  assert.match(h.sent.at(-1).text, /┌─〔 \*_STATUS_\* 〕/);
+  assert.match(h.sent.at(-1).text, /CHATBOT ENABLED/);
+  assert.match(h.sent.at(-1).text, /⚡ \*_NOVA_VOID MDX_\*$/m);
+  await h.send('.chatbot off', OWNER);
+  assert.match(h.sent.at(-1).text, /┌─〔 \*_STATUS_\* 〕/);
+  assert.match(h.sent.at(-1).text, /CHATBOT DISABLED/);
+});
+
+test('train-list shows SYSTEM section borders', async () => {
+  const h = harness();
+  await h.send('.train something', OWNER);
+  const res = await h.send('.train-list', OWNER);
+  assert.match(h.sent.at(-1).text, /┌─〔 \*_SYSTEM_\* 〕/);
+  assert.match(h.sent.at(-1).text, /└──────────/);
+});
+
+test('usages are clean plain-text cards without orphaned box connectors', async () => {
+  const h = harness();
+  await h.send('.ai', USER);
+  assert.match(h.sent.at(-1).text, /USAGE/);
+  assert.match(h.sent.at(-1).text, /\.ai <question>/);
+  assert.doesNotMatch(h.sent.at(-1).text, /├ \*Command/);
 });

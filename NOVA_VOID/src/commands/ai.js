@@ -12,7 +12,7 @@ export function createAICommands({ ai, sessions, memory, limiter }) {
       async execute(ctx) {
         if (!ctx.argsText) {
           return ctx.reply(
-            ['⚠️ *_USAGE_*', '', '`' + wa.row('Command', '.ai <question>') + '`.'].join('\n')
+            ['⚠️ *_USAGE_*', '', '`.ai <question>`', '', wa.footer()].join('\n')
           );
         }
         const limitKey = `cmd:ai:${ctx.senderJid}`;
@@ -152,7 +152,7 @@ export function createAICommands({ ai, sessions, memory, limiter }) {
         }
         const lines = records.map((item, index) => `\`${index + 1}.\` ${item.content}`).join('\n');
         return ctx.reply(
-          [wa.header(), '', '🧠 *_KNOWLEDGE BASE_*', '', lines, '', wa.row('Total', String(records.length)), '', wa.footer()].join('\n')
+          [wa.header(), '', '🧠 *_KNOWLEDGE BASE_*', '', lines, '', wa.section('SYSTEM'), wa.row('Total', String(records.length)), wa.sectionEnd(), '', wa.footer()].join('\n')
         );
       },
     },

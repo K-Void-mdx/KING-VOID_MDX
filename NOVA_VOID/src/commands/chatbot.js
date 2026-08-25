@@ -25,14 +25,28 @@ export function createChatbotCommand({ state }) {
             '`• Replied to`',
             '`• Triggered according to chatbot rules`',
             '',
+            wa.section('STATUS'),
             wa.row('Status', 'ON'),
+            wa.sectionEnd(),
             '',
             wa.footer(),
           ].join('\n')
         );
       }
       return ctx.reply(
-        [wa.header(), '', '🔴 *_CHATBOT DISABLED_*', '', wa.row('Status', 'OFF'), '', 'Normal messages will remain silent.', '', wa.footer()].join('\n')
+        [
+          wa.header(),
+          '',
+          '🔴 *_CHATBOT DISABLED_*',
+          '',
+          wa.section('STATUS'),
+          wa.row('Status', 'OFF'),
+          wa.sectionEnd(),
+          '',
+          'Normal messages will remain silent.',
+          '',
+          wa.footer(),
+        ].join('\n')
       );
     },
   };

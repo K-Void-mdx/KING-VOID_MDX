@@ -6,7 +6,7 @@ import { join } from 'node:path';
 
 import { createNovaApplication } from '../src/core/factory.js';
 import { resolveRole } from '../src/core/permissions/roles.js';
-import { registerCommand, getCommand, clearCommands } from '../src/core/commands/registry.js';
+import { registerCommand, getCommand, clearCommands, listCommands } from '../src/core/commands/registry.js';
 import { parseCommand } from '../src/core/commands/parse.js';
 import { RateLimiter } from '../src/core/rate-limit.js';
 
@@ -255,7 +255,9 @@ test('owner training becomes global bot knowledge delivered to providers', async
 
 // ---- owner-companion pipeline (live-test regression) ----
 
-test('owner commands typed on the linked phone (fromMe) now dispatch', async () => {
+test('commands typed on the linked phone (fromMe) still dispatch — at CONFIGURED tier only', async () => {
+  // Companion identity is session-derived, not authority: .ping is user-tier,
+  // so an unconfigured linked account may run it like any other user.
   const h = harness();
   const result = await h.app.handle({
     key: { id: 'OWNERMSG1', remoteJid: `${OWNER.split('@')[0]}@s.whatsapp.net`, fromMe: true },
@@ -276,11 +278,13 @@ test("the bot's own sent messages are never re-dispatched as echoes", async () =
   assert.equal(h.sent.length, 0);
 });
 
-test('ephemeral-wrapped owner command still reaches the dispatcher', async () => {
+test('ephemeral-wrapped companion command still reaches the dispatcher', async () => {
+  // Wrappers must unwrap; the ROLE then follows configured lists (.ping is
+  // user-tier so this passes for an unconfigured linked account).
   const h = harness();
   const result = await h.app.handle({
     key: { id: 'EPH1', remoteJid: `${OWNER.split('@')[0]}@s.whatsapp.net`, fromMe: true },
-    message: { ephemeralMessage: { message: { conversation: '.status' } } },
+    message: { ephemeralMessage: { message: { conversation: '.ping' } } },
   });
   assert.equal(result.type, 'command');
 });
@@ -353,10 +357,12 @@ test('bare and device-suffixed owner JIDs both resolve to owner; strangers do no
   assert.equal(resolveRole({ sender: '50999999999@s.whatsapp.net', ...base }), 'user');
 });
 
-test('the bot own account identities (PN and LID) are implicitly owner', () => {
-  const base = { ownerJids: [], sudoJids: [], botJids: ['2347046855205:6@s.whatsapp.net', '123456789012345@lid'] };
-  assert.equal(resolveRole({ sender: '2347046855205@s.whatsapp.net', ...base }), 'owner');
-  assert.equal(resolveRole({ sender: '123456789012345@lid', ...base }), 'owner');
+test('linked bot account identities (PN and LID) carry NO implicit authority', () => {
+  // Owner ≠ bot pairing account. Even the linked session's own JIDs resolve
+  // strictly by configured lists.
+  const base = { ownerJids: [], sudoJids: [] };
+  assert.equal(resolveRole({ sender: '2348000000009@s.whatsapp.net', ...base }), 'user');
+  assert.equal(resolveRole({ sender: '123456789012345@lid', ...base }), 'user');
   assert.equal(resolveRole({ sender: '999888777@lid', ...base }), 'user');
 });
 
@@ -380,16 +386,17 @@ test('owner identity matrix: every JID form of the owner number passes sudo-tier
   }
 });
 
-test('fromMe messages are always owner-tier even with an unrecognizable sender JID', async () => {
+test('fromMe grants NOTHING by itself — unconfigured sender stays user-tier', async () => {
   const h = harness();
-  const result = await h.send('.status', '100000000000000000@s.whatsapp.net', { key: undefined });
-  // Direct handle with fromMe=true and a sender that matches no configured list.
+  // Direct handle with fromMe=true and a sender that matches no configured
+  // list: sudo-tier .status must be denied even though it is "from me".
   const res = await h.app.handle({
     key: { id: 'fm1', remoteJid: CHAT, fromMe: true },
     message: { conversation: '.status' },
   });
-  assert.equal(res.type, 'command');
-  assert.match(h.sent.at(-1).text, /SYSTEM STATUS/);
+  assert.equal(res.type, 'permission-denied');
+  const last = h.sent.at(-1);
+  if (last) assert.match(last.text, /ACCESS RESTRICTED/);
 });
 
 test('resolveRole unit matrix for the pinned developer number', () => {
@@ -397,7 +404,7 @@ test('resolveRole unit matrix for the pinned developer number', () => {
   assert.equal(resolveRole({ sender: '2347046855205@s.whatsapp.net', ownerJids: owners }), 'owner');
   assert.equal(resolveRole({ sender: '2347046855205:6@s.whatsapp.net', ownerJids: owners }), 'owner');
   assert.equal(resolveRole({ sender: '2347046855205', ownerJids: owners }), 'owner');
-  assert.equal(resolveRole({ sender: 'anything@lid', ownerJids: owners, fromMe: true }), 'owner');
+  assert.equal(resolveRole({ sender: 'anything@lid', ownerJids: owners }), 'user'); // fromMe is not a role input
   assert.equal(resolveRole({ sender: USER, ownerJids: owners }), 'user');
 });
 
@@ -528,17 +535,21 @@ test('old number has NO configured permanent owner authority left', () => {
   assert.equal(resolveRole({ sender: '50932528446', ...base }), 'user');
 });
 
-test('old account retains ONLY live linked-companion semantics (fromMe on its own session), not configured authority', async () => {
-  // As the currently-linked bot device, its own typed messages must still
-  // dispatch (companion mode) — this is session-derived, NOT configuration.
+test('linked companion dispatches user-tier commands but holds NO configured authority', async () => {
+  // Session-derived identity: typed messages on the linked phone reach the
+  // dispatcher like any external user's — .ping passes, sudo-tier is denied.
   const h = harness();
-  const res = await h.app.handle({
+  const ping = await h.app.handle({
     key: { id: 'comp-1', remoteJid: CHAT, fromMe: true },
+    message: { conversation: '.ping' },
+  });
+  assert.equal(ping.type, 'command');
+  const denied = await h.app.handle({
+    key: { id: 'comp-2', remoteJid: CHAT, fromMe: true },
     message: { conversation: '.status' },
   });
-  assert.equal(res.type, 'command');
-  assert.match(h.sent.at(-1).text, /SYSTEM STATUS/);
-  // ...but it holds no sudo/owner standing for OTHER senders' checks.
+  assert.equal(denied.type, 'permission-denied');
+  // ...and the OLD number as a plain external sender stays restricted too.
   const h2 = harness();
   assert.equal((await h2.send('.status', OLD_OWNER)).type, 'permission-denied');
 });
@@ -579,4 +590,56 @@ test('usages are clean plain-text cards without orphaned box connectors', async 
   assert.match(h.sent.at(-1).text, /USAGE/);
   assert.match(h.sent.at(-1).text, /\.ai <question>/);
   assert.doesNotMatch(h.sent.at(-1).text, /├ \*Command/);
+});
+
+// ─── Architecture separations: owner authority vs linked pairing account ────
+
+import { env as appEnv } from '../src/config/env.js';
+
+test('exactly the 11 documented commands are registered', () => {
+  clearCommands();
+  createNovaApplication({
+    botJid: BOT,
+    ownerJids: [OWNER],
+    storage: {},
+    reply: async () => ({ key: { id: 'z' } }),
+  });
+  const names = listCommands().map((c) => c.name).sort();
+  assert.deepEqual(names, [
+    'ai', 'chatbot', 'clear-h', 'generate', 'history',
+    'menu', 'ping', 'status', 'train', 'train-list', 'train-remove',
+  ]);
+  assert.equal(listCommands().length, 11);
+});
+
+test('config exposes NO pairing-number default and pins ONLY the permanent owner', () => {
+  // PAIR_PHONE was removed: the linked bot account is chosen interactively.
+  assert.ok(!('pairingPhone' in appEnv), 'pairingPhone must not exist on env');
+  assert.equal(appEnv.pairingPhone, undefined);
+  assert.equal(appEnv.developerNumber, '2347046855205');
+  assert.ok(appEnv.ownerJids.includes('2347046855205@s.whatsapp.net'));
+  assert.ok(!appEnv.ownerJids.some((jid) => String(jid).includes('50932528446')),
+    'old number must never be a configured owner');
+});
+
+test('echo suppression drops only tracked outbound ids, never legitimate inbound', async () => {
+  const h = harness();
+  await h.app.handle({
+    key: { id: 'PINGX', remoteJid: CHAT, participant: OWNER },
+    message: { conversation: '.ping' },
+  });
+  const replyId = h.sent.at(-1).id;
+  const echo = await h.app.handle({
+    key: { id: replyId, remoteJid: CHAT, fromMe: true },
+    message: { conversation: '.ping again' },
+  });
+  assert.equal(echo.reason, 'self-echo');
+
+  // A different inbound message right after must flow the normal pipeline
+  // (non-command, chatbot off → no-trigger), proving no over-suppression.
+  const fresh = await h.app.handle({
+    key: { id: 'HUMAN-1', remoteJid: CHAT, participant: USER },
+    message: { conversation: 'hello there' },
+  });
+  assert.equal(fresh.reason, 'no-trigger');
 });

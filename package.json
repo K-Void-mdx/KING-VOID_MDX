@@ -7,7 +7,9 @@
   "scripts": {
     "start": "node NOVA_VOID/src/index.js",
     "start:legacy": "node index.js",
+    "test": "node --test NOVA_VOID/test/*.test.js",
     "test:nova": "node --test NOVA_VOID/test/*.test.js",
+    "check": "npm --prefix NOVA_VOID run check",
     "dev": "nodemon NOVA_VOID/src/index.js"
   },
   "keywords": [

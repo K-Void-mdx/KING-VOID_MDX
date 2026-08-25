@@ -32,8 +32,8 @@ export class NovaApplication {
     trace = () => {},
   }) {
     this.botJid = botJid;
-    // Linked companions may be addressed through WhatsApp's alternate LID
-    // identity; both forms belong to the same owner account.
+    // WhatsApp may address the linked account through an alternate LID
+    // identity; kept for mention-matching only — never for authority.
     this.botLid = botLid;
     this.ownerJids = ownerJids;
     this.sudoJids = sudoJids;
@@ -61,7 +61,8 @@ export class NovaApplication {
     this.botName = botName;
     this.trace = trace;
     // IDs of messages THIS bot sent, so the companion echo of our own replies
-    // is never re-dispatched. Owner-typed messages have fresh ids and pass.
+    // is never re-dispatched. Human-typed messages (even fromMe) have fresh
+    // ids and pass through for normal configured-role dispatch.
     this.outboundIds = new Set();
     // IDs of INBOUND messages already processed — Baileys can replay the same
     // message after a reconnect, which must never double-fire a command.
@@ -109,10 +110,10 @@ export class NovaApplication {
     if (isBroadcastChat(message.chatJid)) return { handled: false, reason: 'ignored-status' };
     if (message.isProtocol) return { handled: false, reason: 'protocol' };
 
-    // This bot runs as a linked companion ON the owner's account, so
-    // owner-typed messages legitimately arrive with fromMe=true and MUST
-    // dispatch. Only the echo of our OWN sends is skipped — identified by
-    // message id, never by fromMe alone.
+    // Echo suppression is ID-based, never role-based: only messages THIS bot
+    // actually sent are skipped. A human typing on the linked phone produces
+    // fresh ids, passes this gate, and is then dispatched strictly by their
+    // CONFIGURED role (companion identity grants no authority).
     if (message.fromMe && this.outboundIds.has(message.id)) {
       return { handled: false, reason: 'self-echo' };
     }
@@ -132,8 +133,6 @@ export class NovaApplication {
       ownerJids: this.ownerJids,
       sudoJids: this.sudoJids,
       isGroupAdmin: Boolean(raw.isGroupAdmin),
-      botJids: [this.botJid, this.botLid],
-      fromMe: message.fromMe,
     });
 
     const parsed = parseCommand(message.text, this.prefixes);

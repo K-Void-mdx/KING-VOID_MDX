@@ -83,18 +83,32 @@ export function versionLine(version, source) {
   return `${paint('bright', '[ SYSTEM ]')} ${paint('white', 'WA proto'.padEnd(9))}: ${paint('grey', `${version ?? 'baileys default'} (${source})`)}`;
 }
 
-export function authRequiredScreen(defaultPhone) {
-  const hint = defaultPhone ? ` [${defaultPhone}]` : '';
+/**
+ * Interactive pairing screen. The number is chosen by the operator AT PAIRING
+ * TIME — there is deliberately no configured default and no "Press Enter"
+ * shortcut. OWNER number ≠ bot pairing number.
+ */
+export function authRequiredScreen() {
   return [
     '',
     paint('yellow', '[ AUTHENTICATION REQUIRED ]'),
     '',
-    paint('white', 'Enter your WhatsApp number.'),
+    paint('white', 'Enter the WhatsApp number to link as NOVA_VOID MDX.'),
     paint('grey', 'Include country code without + or spaces.'),
     paint('grey', 'Example: 2348012345678'),
-    hint ? paint('grey', `Press Enter to use the configured number${hint}.`) : '',
     '',
-  ].filter(Boolean).join('\n');
+  ].join('\n');
+}
+
+export const PAIRING_PROMPT = 'Number: ';
+
+/** Mode banner shown when a confirmed-invalid session forces fresh pairing. */
+export function freshPairingScreen() {
+  return [
+    '',
+    paint('yellow', '[ MODE ] Fresh pairing required'),
+    '',
+  ].join('\n');
 }
 
 export function verifyingScreen(masked) {
@@ -208,7 +222,6 @@ export const log = {
   retry: (seconds, reason) => `${paint('yellow', '[ RETRY ]')} Connection interrupted (${reason}). Retrying in ${Math.round(seconds / 1000)} second(s)...`,
   restart: () => `${paint('yellow', '[ RETRY ]')} Server requested a fresh connection. Reconnecting now...`,
   loggedOut: () => `${paint('red', '[ AUTH ]')} Session was logged out. Delete data/auth, then run npm start again to re-pair.`,
-  forbidden: () => `${paint('red', '[ ERROR ]')} WhatsApp refused this device (403). Wait a few minutes and try again.`,
   replaced: () => `${paint('yellow', '[ WARN ]')} Connection replaced by another session of this account.`,
   error: (message) => `${paint('red', '[ ERROR ]')} ${message}`,
   mode: (mode) => `${paint('blue', '[ MODE ]')} ${mode}`,

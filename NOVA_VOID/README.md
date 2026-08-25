@@ -18,13 +18,14 @@ A clean, modular WhatsApp bot built for Termux (Android, ARM64).
 
 ```bash
 cd NOVA_VOID
-cp .env.example .env       # then edit OWNER_JIDS and PAIR_PHONE
+cp .env.example .env       # then edit OWNER_JIDS
 npm install                # installs only baileys + pino
 npm start
 ```
 
-First run: the bot prints a pairing code — enter it in WhatsApp under
-**Linked devices → Link with phone number**.
+First run: the bot asks for the WhatsApp number to link (typed interactively —
+no configured default), prints a pairing code, and you enter it in WhatsApp
+under **Linked devices → Link with phone number**.
 
 ## Configuration
 
@@ -34,10 +35,12 @@ All configuration lives in `.env` (see `.env.example`). Never commit `.env`.
 |---|---|
 | `BOT_NAME` | Display name (default `NOVA_VOID MDX`) |
 | `PREFIX` | Command prefix (default `.`) |
-| `OWNER_JIDS` | Comma-separated owner JIDs |
+| `OWNER_JIDS` | Comma-separated owner JIDs (permanent authority) |
 | `SUDO_JIDS` | Comma-separated trusted users |
-| `PAIR_PHONE` | Phone number used once for pairing |
 | `AUTH_DIR` / `DATA_DIR` | Storage locations (gitignored) |
+
+There is deliberately NO pairing-number variable: the linked bot account is
+chosen interactively at pairing time and is independent of the owner config.
 
 ## Commands
 

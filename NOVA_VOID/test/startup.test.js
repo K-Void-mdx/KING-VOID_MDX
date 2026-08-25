@@ -18,10 +18,12 @@ test('normalizePhone strips formatting, +, and whitespace', () => {
   assert.equal(normalizePhone('  1 555 010 2030 ').phone, '15550102030');
 });
 
-test('normalizePhone falls back to the configured default on empty input', () => {
-  const result = normalizePhone('', '2347046855205');
-  assert.ok(result.ok);
-  assert.equal(result.phone, '2347046855205');
+test('normalizePhone rejects empty input — there is NO hidden default number', () => {
+  // The pairing number comes ONLY from the operator's typed answer; even if
+  // someone passes a stray argument it must never be used as a fallback.
+  assert.equal(normalizePhone('').ok, false);
+  assert.equal(normalizePhone('   ').ok, false);
+  assert.equal(normalizePhone(null).ok, false);
 });
 
 test('normalizePhone rejects garbage, short numbers, and empty-with-no-default', () => {
@@ -38,10 +40,11 @@ test('maskPhone only ever reveals the last four digits', () => {
 
 // ---- connection lifecycle ----
 
-test('classifyDisconnect stops for auth-level failures', () => {
+test('classifyDisconnect stops for permanent auth failures, retries transient403', () => {
   assert.deepEqual(classifyDisconnect(401), { action: 'stop', reason: 'logged_out' });
-  assert.deepEqual(classifyDisconnect(403), { action: 'stop', reason: 'forbidden' });
   assert.deepEqual(classifyDisconnect(440), { action: 'stop', reason: 'connection_replaced' });
+  //403 is transient (session may be in use by another device); caller bounds retries.
+  assert.deepEqual(classifyDisconnect(403), { action: 'retry', reason: 'forbidden' });
 });
 
 test('classifyDisconnect restarts on 515 and retries transport errors (incl. HTTP 405)', () => {
@@ -269,4 +272,155 @@ test('online gate returns to idle after a fully failed cycle so a healthy retry 
   gate.failure();
   assert.equal(gate.state, 'idle');
   assert.equal(gate.begin(), true);
+});
+
+// ─── Process lock tests ───────────────────────────────────────────────────────
+
+import { join } from 'node:path';
+import { writeFile, readFile, unlink as unlinkFs, rm } from 'node:fs/promises';
+import { mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+
+test('stale lock file with dead PID is reclaimable', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'lock-'));
+  const lockFile = join(dir, 'NOVA_VOID.lock');
+  await writeFile(lockFile, JSON.stringify({ pid: 999999999, ts: Date.now() }), 'utf8');
+  const lock = JSON.parse(await readFile(lockFile, 'utf8'));
+  let pidAlive = false;
+  try { process.kill(lock.pid, 0); pidAlive = true; } catch { pidAlive = false; }
+  assert.equal(pidAlive, false, 'stale lock PID should be dead');
+  await unlinkFs(lockFile);
+  await rm(dir, { recursive: true, force: true });
+});
+
+test('active lock with live PID blocks startup', async () => {
+  const lockData = JSON.stringify({ pid: process.pid, ts: Date.now() });
+  const parsed = JSON.parse(lockData);
+  assert.equal(parsed.pid, process.pid);
+  assert.equal(typeof parsed.ts, 'number');
+  // process.kill(self, 0) always succeeds → lock would be "alive"
+  let alive = false;
+  try { process.kill(parsed.pid, 0); alive = true; } catch { alive = false; }
+  assert.equal(alive, true, 'current process PID is always alive');
+});
+
+// ─── Interactive pairing contract (owner ≠ bot pairing account) ─────────────
+
+test('pairing screen asks for the number with NO configured default', () => {
+  const plain = (s) => s.replace(/\x1b\[[0-9;]*m/g, '');
+  const screen = plain(ui.authRequiredScreen());
+  assert.match(screen, /Enter the WhatsApp number to link as NOVA_VOID MDX\./);
+  assert.match(screen, /Include country code without \+ or spaces\./);
+  assert.match(screen, /Example: 2348012345678/);
+  assert.doesNotMatch(screen, /Press Enter/i);
+  assert.doesNotMatch(screen, /configured number/i);
+  assert.doesNotMatch(screen, /50932528446/); // the old owner must never resurface here
+  assert.equal(ui.PAIRING_PROMPT, 'Number: ');
+});
+
+test('fresh-pairing mode banner matches the required wording', () => {
+  const screen = ui.freshPairingScreen().replace(/\x1b\[[0-9;]*m/g, '');
+  assert.match(screen, /\[ MODE \] Fresh pairing required/);
+});
+
+// ─── Pairing gate: code requested ONLY at the qr-ready stage ────────────────
+
+import { shouldRequestPairingCode } from '../src/core/pairing-gate.js';
+
+test('pairing code may be requested only for qr updates of unregistered sessions with a number', () => {
+  const ok = { registered: false, hasPhone: true };
+  assert.equal(shouldRequestPairingCode({ qr: 'QRDATA' }, ok), true);
+  // Not ready / wrong context:
+  assert.equal(shouldRequestPairingCode({ connection: 'open' }, ok), false, 'no qr yet');
+  assert.equal(shouldRequestPairingCode({}, ok), false);
+  assert.equal(shouldRequestPairingCode(undefined, ok), false);
+  assert.equal(shouldRequestPairingCode({ qr: 'QRDATA' }, { registered: true, hasPhone: true }), false,
+    'registered sessions must never request codes');
+  assert.equal(shouldRequestPairingCode({ qr: 'QRDATA' }, { registered: false, hasPhone: false }), false,
+    'no operator number → nothing to request against');
+});
+
+// ─── Reconnect scheduler: one timer, stale generations never fire ───────────
+
+import { createReconnectScheduler } from '../src/core/reconnect-scheduler.js';
+
+function fakeTimers() {
+  const armed = new Map();
+  let seq = 0;
+  return {
+    fired: [],
+    set(fn) { const id = ++seq; armed.set(id, fn); return id; },
+    clear(id) { armed.delete(id); },
+    runAll() { for (const fn of [...armed.values()]) fn(); armed.clear(); },
+    get size() { return armed.size; },
+  };
+}
+
+test('scheduler keeps exactly ONE pending timer (reschedule cancels the old)', () => {
+  const timers = fakeTimers();
+  let fires = 0;
+  const sched = createReconnectScheduler({ timers, onFire: () => { fires += 1; } });
+  sched.schedule(1000);
+  assert.equal(sched.pending, true);
+  assert.equal(timers.size, 1);
+  sched.schedule(2000); // second schedule must cancel the first handle
+  assert.equal(timers.size, 1, 'still exactly one armed timer');
+  timers.runAll();
+  assert.equal(fires, 1, 'only the newest callback fires');
+});
+
+test('scheduler.cancel prevents fire and orphans already-detached callbacks', () => {
+  const timers = fakeTimers();
+  let fires = 0;
+  const sched = createReconnectScheduler({ timers, onFire: () => { fires += 1; } });
+  sched.schedule(500);
+  const before = sched.generation;
+  sched.cancel();
+  assert.equal(sched.pending, false);
+  assert.ok(sched.generation > before, 'cancel bumps generation');
+  timers.runAll();
+  assert.equal(fires, 0, 'cancelled timer must never fire');
+});
+
+test('a stale scheduled callback cannot double-fire after reschedule', () => {
+  const timers = fakeTimers();
+  let fires = 0;
+  const sched = createReconnectScheduler({ timers, onFire: () => { fires += 1; } });
+  sched.schedule(10);
+  // grab the FIRST callback reference, then supersede it
+  sched.schedule(20);
+  sched.schedule(30);
+  timers.runAll();
+  assert.equal(fires, 1);
+});
+
+// ─── Online notification destination ────────────────────────────────────────
+
+import { ownerNotificationTarget } from '../src/core/jid.js';
+
+test('online card targets the bare CONFIGURED owner JID in every config form', () => {
+  assert.equal(ownerNotificationTarget(['2347046855205@s.whatsapp.net']), '2347046855205@s.whatsapp.net');
+  assert.equal(ownerNotificationTarget(['2347046855205:6@s.whatsapp.net']),
+    '2347046855205@s.whatsapp.net', 'device suffix stripped');
+  assert.equal(ownerNotificationTarget(['2347046855205']),
+    '2347046855205@s.whatsapp.net', 'bare digits gain the domain');
+  assert.equal(ownerNotificationTarget([]), '', 'nothing configured → no target');
+  assert.equal(ownerNotificationTarget(['', null]), '');
+});
+
+// ─── Startup state machine: confirmed-invalid path + no input-time loops ────
+
+test('confirmed-invalid sessions may clear into fresh pairing; temporary ones may not', () => {
+  // connecting / pairing / online → clearing_session → awaiting_number
+  assert.ok(canTransition('connecting', 'clearing_session'));
+  assert.ok(canTransition('awaiting_pair', 'clearing_session'));
+  assert.ok(canTransition('pairing', 'clearing_session'));
+  assert.ok(canTransition('online', 'clearing_session'));
+  assert.ok(canTransition('clearing_session', 'awaiting_number'));
+
+  // While WAITING FOR THE OPERATOR'S NUMBER nothing may reconnect behind
+  // their back — awaiting_number has no edge into connecting-adjacent loops.
+  assert.ok(!canTransition('awaiting_number', 'reconnecting'));
+  assert.ok(!canTransition('awaiting_number', 'clearing_session'));
+  assert.ok(canTransition('awaiting_number', 'connecting'), 'only an explicit submit connects');
 });

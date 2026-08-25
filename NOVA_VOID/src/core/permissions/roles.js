@@ -20,21 +20,23 @@ export function hasRole(role, requiredRole) {
   return (ROLE_RANK[role] ?? -1) >= (ROLE_RANK[requiredRole] ?? 999);
 }
 
-export function resolveRole({ sender, ownerJids = [], sudoJids = [], isGroupAdmin = false, botJids = [], fromMe = false }) {
-  // A linked-companion message with fromMe=true can ONLY originate from the
-  // owner's own WhatsApp account (echoes of bot sends are filtered earlier by
-  // outbound-ID tracking). It therefore always carries full owner rights,
-  // regardless of which JID representation WhatsApp used for it.
-  if (fromMe) return 'owner';
-
+/**
+ * Resolve a sender's role from CONFIGURED lists only.
+ *
+ * Three identities stay deliberately separate:
+ *  A. Configured permissions  → OWNER_JIDS / SUDO_JIDS (permanent authority).
+ *  B. Linked bot companion    → session-derived identity of the paired
+ *    account. It is NOT configured authority: messages typed on the linked
+ *    phone dispatch at USER tier unless the sender also appears in the
+ *    configured lists.
+ *  C. Bot outbound echoes     → suppressed by tracked message IDs in
+ *    application.js, never by role.
+ */
+export function resolveRole({ sender, ownerJids = [], sudoJids = [], isGroupAdmin = false }) {
   const jid = normalizeJid(sender);
   const owners = new Set(ownerJids.map(normalizeJid));
   const sudos = new Set(sudoJids.map(normalizeJid));
-  // The bot's own account (any of its identities) is always owner-level:
-  // it runs as a linked companion ON the owner's WhatsApp account.
-  const selfIdentities = new Set(botJids.filter(Boolean).map(normalizeJid));
 
-  if (selfIdentities.has(jid)) return 'owner';
   if (owners.has(jid)) return 'owner';
   if (sudos.has(jid)) return 'sudo';
   if (isGroupAdmin) return 'admin';

@@ -20,3 +20,18 @@ export function maskJid(jid = '') {
   const visible = local.length <= 6 ? local : `${local.slice(0, 4)}***${local.slice(-4)}`;
   return server ? `${visible}@${server}` : visible;
 }
+
+/**
+ * Destination for the startup online card: the FIRST CONFIGURED OWNER as a
+ * bare user JID. Strips device suffixes ("…:6@s.whatsapp.net") and domains
+ * bare numbers. Returns '' when nothing configured — callers must skip the
+ * send rather than fall back to the bot's own identity.
+ */
+export function ownerNotificationTarget(jids = []) {
+  for (const raw of Array.isArray(jids) ? jids : []) {
+    const bare = String(raw ?? '').trim().toLowerCase().replace(/:\d+(?=@)/, '');
+    if (!bare) continue;
+    return /^\d+$/.test(bare) ? `${bare}@s.whatsapp.net` : bare;
+  }
+  return '';
+}

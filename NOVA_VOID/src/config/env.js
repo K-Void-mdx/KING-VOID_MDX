@@ -44,9 +44,9 @@ function resolvePath(input, fallback) {
 // Permanent developer/owner of NOVA_VOID MDX. Always granted the highest
 // role regardless of what else is configured in OWNER_JIDS.
 // NOTE: this is the CONFIGURED permanent owner. It is architecturally
-// separate from the linked WhatsApp bot account (see PAIR_PHONE / sock.user):
-// the linked account gets companion privileges only because it IS the bot's
-// own device session — never through this pin.
+// separate from the linked WhatsApp bot account: the account chosen during
+// interactive pairing gets NO configured authority from this pin — owner
+// rights come ONLY from OWNER_JIDS / DEVELOPER_NUMBER matching the sender.
 const DEVELOPER_NUMBER = '2347046855205';
 const DEVELOPER_JID = `${DEVELOPER_NUMBER}@s.whatsapp.net`;
 export { DEVELOPER_JID };
@@ -62,7 +62,6 @@ export const env = Object.freeze({
   ownerJids: withDeveloper(jidList(process.env.OWNER_JIDS, process.env.OWNER_JID)),
   developerNumber: DEVELOPER_NUMBER,
   sudoJids: jidList(process.env.SUDO_JIDS),
-  pairingPhone: value(process.env.PAIR_PHONE),
   authDir: resolvePath(process.env.AUTH_DIR, './data/auth'),
   dataDir: resolvePath(process.env.DATA_DIR, './data'),
   aiMaxHistory: Number(value(process.env.AI_MAX_HISTORY, '40')) || 40,

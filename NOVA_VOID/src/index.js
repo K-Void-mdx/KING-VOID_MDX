@@ -379,6 +379,7 @@ export async function startNovaVoid() {
         return sock.sendMessage(chatJid, { image: media.buffer, caption: media.caption ?? '' });
       },
       trace,
+      env, // Pass full env for provider registration
     });
     application = bundle.app;
   }

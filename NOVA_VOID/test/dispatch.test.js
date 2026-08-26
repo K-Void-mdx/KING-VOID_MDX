@@ -596,7 +596,7 @@ test('usages are clean plain-text cards without orphaned box connectors', async 
 
 import { env as appEnv } from '../src/config/env.js';
 
-test('exactly the 11 documented commands are registered', () => {
+test('exactly the 12 documented commands are registered', () => {
   clearCommands();
   createNovaApplication({
     botJid: BOT,
@@ -607,9 +607,9 @@ test('exactly the 11 documented commands are registered', () => {
   const names = listCommands().map((c) => c.name).sort();
   assert.deepEqual(names, [
     'ai', 'chatbot', 'clear-h', 'generate', 'history',
-    'menu', 'ping', 'status', 'train', 'train-list', 'train-remove',
+    'menu', 'ping', 'providers', 'status', 'train', 'train-list', 'train-remove',
   ]);
-  assert.equal(listCommands().length, 11);
+  assert.equal(listCommands().length, 12);
 });
 
 test('config exposes NO pairing-number default and pins ONLY the permanent owner', () => {

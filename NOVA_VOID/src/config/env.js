@@ -66,6 +66,11 @@ export const env = Object.freeze({
   dataDir: resolvePath(process.env.DATA_DIR, './data'),
   aiMaxHistory: Number(value(process.env.AI_MAX_HISTORY, '40')) || 40,
   debugMessages: /^(1|true|yes)$/i.test(value(process.env.DEBUG_MESSAGES, '')),
+  // AI provider keys — never commit real values
+  geminiApiKey: value(process.env.GEMINI_API_KEY),
+  groqApiKey: value(process.env.GROQ_API_KEY),
+  openCodeApiKey: value(process.env.OPENCODE_API_KEY),
+  openRouterApiKey: value(process.env.OPENROUTER_API_KEY),
 });
 
 export function assertValidEnv() {

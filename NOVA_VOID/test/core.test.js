@@ -42,6 +42,43 @@ test('does not trigger chatbot on ordinary messages', () => {
   assert.equal(isChatbotTrigger(message, 'bot@s.whatsapp.net'), false);
 });
 
+test('fromMe DM messages derive senderJid from botJid, not the chat partner', () => {
+  const bot = '2347046855205@s.whatsapp.net';
+  // fromMe DM with no explicit sender fields — senderJid must be the linked account
+  const dm = normalizeMessage(
+    { key: { id: 'fm1', remoteJid: '50932528446@s.whatsapp.net', fromMe: true }, message: { conversation: '.ai hey' } },
+    { botJid: bot },
+  );
+  assert.equal(dm.senderJid, bot, 'fromMe DM senderJid should be botJid');
+  assert.equal(dm.fromMe, true);
+  assert.equal(dm.isFromBot, true);
+
+  // fromMe DM where remoteJid is missing entirely — still gets botJid
+  const noRemote = normalizeMessage(
+    { key: { id: 'fm2', fromMe: true }, message: { conversation: '.ping' } },
+    { botJid: bot },
+  );
+  assert.equal(noRemote.senderJid, bot, 'fromMe with no remoteJid falls back to botJid');
+});
+
+test('incoming messages still derive senderJid from senderPn/participant', () => {
+  const bot = '2347046855205@s.whatsapp.net';
+  // DM from another user — senderJid = senderPn
+  const incoming = normalizeMessage(
+    { key: { id: 'in1', remoteJid: '2347046855205@s.whatsapp.net', senderPn: '50932528446@s.whatsapp.net' }, message: { conversation: '.ping' } },
+    { botJid: bot },
+  );
+  assert.equal(incoming.senderJid, '50932528446@s.whatsapp.net');
+
+  // Group message — senderJid = participant
+  const group = normalizeMessage(
+    { key: { id: 'in2', remoteJid: '1203@g.us', participant: '50932528446@s.whatsapp.net' }, message: { conversation: 'hello' } },
+    { botJid: bot },
+  );
+  assert.equal(group.senderJid, '50932528446@s.whatsapp.net');
+  assert.equal(group.isGroup, true);
+});
+
 test('AI session history is bounded and clearable', () => {
   const sessions = new AISessionStore({ maxMessages: 2 });
   sessions.append('user@s.whatsapp.net', { role: 'user', content: 'one' });

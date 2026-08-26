@@ -12,6 +12,7 @@ import { createChatbotCommand } from '../commands/chatbot.js';
 import { createGenerateCommand } from '../commands/generate.js';
 import { createCoreCommands } from '../commands/core.js';
 import { DEVELOPER_JID } from '../config/env.js';
+import { registerProviders } from '../ai/providers/index.js';
 
 /**
  * Application factory. Storage paths are injected so production persists
@@ -32,6 +33,7 @@ export function createNovaApplication({
   botName = 'NOVA_VOID MDX',
   maxHistory = 40,
   trace,
+  env = {},
 }) {
   const sessions = new AISessionStore({
     maxMessages: Math.max(1, Number(maxHistory) || 40),
@@ -41,6 +43,12 @@ export function createNovaApplication({
   const router = new AIRouter();
   const ai = new AIService({ router, sessions, memory });
   const generation = new GenerationService({ imageProvider, videoProvider });
+
+  // Auto-register providers from environment if available
+  if (env && Object.keys(env).length > 0) {
+    registerProviders(router, generation, env);
+  }
+
   const chatbot = new ChatbotState({ filePath: storage.chatbotStateFile });
   // Permanent guarantee: the developer number is always owner-tier no matter
   // which configuration path built this application.
@@ -63,7 +71,7 @@ export function createNovaApplication({
   });
 
   clearCommands();
-  app.register(createCoreCommands({ app, botName, prefix: Array.isArray(prefixes) ? prefixes[0] : '.' }));
+  app.register(createCoreCommands({ app, botName, prefix: Array.isArray(prefixes) ? prefixes[0] : '.', env }));
   app.register(createAICommands({ ai, sessions, memory, limiter: app.limiter }));
   app.register(createChatbotCommand({ state: app.chatbot }));
   app.register(createGenerateCommand({ generation }));

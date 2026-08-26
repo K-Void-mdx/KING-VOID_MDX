@@ -1,10 +1,11 @@
 import { listCommands } from '../core/commands/registry.js';
+import { getProviderStatus } from '../ai/providers/index.js';
 import * as wa from '../ui/wa-style.js';
 
 /**
- * Tier-1 core commands: ping, status, menu.
+ * Tier-1 core commands: ping, status, menu, providers.
  */
-export function createCoreCommands({ app, botName = 'NOVA_VOID MDX', prefix = '.' }) {
+export function createCoreCommands({ app, botName = 'NOVA_VOID MDX', prefix = '.', env = {} }) {
   return [
     {
       name: 'ping',
@@ -88,6 +89,36 @@ export function createCoreCommands({ app, botName = 'NOVA_VOID MDX', prefix = '.
         sections.push('');
         sections.push(wa.footer(botName));
         return ctx.reply(sections.join('\n'));
+      },
+    },
+    {
+      name: 'providers',
+      aliases: ['ai-status'],
+      category: 'core',
+      role: 'owner',
+      usage: '.providers',
+      description: 'Check AI provider configuration and status.',
+      async execute(ctx) {
+        const status = getProviderStatus(env);
+        const lines = [
+          wa.header(botName),
+          '',
+          '🤖 *_AI PROVIDERS_*',
+          '',
+          wa.section('CONFIGURATION'),
+        ];
+        for (const [name, info] of Object.entries(status)) {
+          const icon = info.configured ? '🟢' : '🔴';
+          lines.push(wa.row(`${icon} ${name}`, info.configured ? 'ACTIVE' : 'NOT SET'));
+        }
+        lines.push(wa.sectionEnd());
+        lines.push('');
+        lines.push(wa.section('FAILOVER'));
+        lines.push(wa.row('Order', 'Gemini → Groq → Zen → OpenRouter'));
+        lines.push(wa.sectionEnd());
+        lines.push('');
+        lines.push(wa.footer(botName));
+        return ctx.reply(lines.join('\n'));
       },
     },
   ];

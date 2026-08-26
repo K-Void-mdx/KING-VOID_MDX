@@ -31,17 +31,17 @@ export function normalizeMessage(raw = {}, { botJid = '' } = {}) {
     ...(raw.mentionedJids ?? []),
   ].filter(Boolean);
 
+  const isFromMe = Boolean(key.fromMe ?? raw.fromMe);
+  const explicitSender = key.participant ?? key.senderPn ?? raw.senderJid ?? raw.sender;
+
   return {
     id: key.id ?? raw.id ?? null,
     chatJid: key.remoteJid ?? raw.chatJid ?? null,
-    senderJid:
-      key.participant ??
-      key.senderPn ??
-      raw.senderJid ??
-      raw.sender ??
-      key.remoteJid ??
-      null,
-    fromMe: Boolean(key.fromMe ?? raw.fromMe),
+    // For fromMe messages with no explicit sender fields, the sender IS the
+    // linked account — use botJid so sessions, role resolution, and dispatch
+    // correctly attribute the message to the owner, not the chat partner.
+    senderJid: (isFromMe && !explicitSender) ? (botJid ?? key.remoteJid ?? null) : (explicitSender ?? key.remoteJid ?? null),
+    fromMe: isFromMe,
     text: extractText(message),
     mentionedJids,
     quotedParticipant: context.participant ?? raw.quotedParticipant ?? null,

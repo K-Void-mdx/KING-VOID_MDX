@@ -1,5 +1,5 @@
 function normalizeJid(value = '') {
-  return String(value).trim().toLowerCase();
+  return String(value).trim().toLowerCase().replace(/:\d+(?=@)/, '');
 }
 
 /**

@@ -9,7 +9,7 @@ export class GeminiImageProvider {
   #model;
   #timeout;
 
-  constructor({ apiKey, model = 'gemini-2.0-flash-preview-image-generation', timeoutMs = 60_000 }) {
+  constructor({ apiKey, model = 'gemini-2.0-flash', timeoutMs = 60_000 }) {
     this.#apiKey = apiKey;
     this.#model = model;
     this.#timeout = timeoutMs;

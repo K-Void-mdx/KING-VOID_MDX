@@ -172,12 +172,17 @@ export class NovaApplication {
     }
 
     if (this.chatbot.isEnabled(message.chatJid)) {
-      // Only explicit addressment (@mention or reply to the bot) may reach the AI
-      // layer; ordinary chatter must never consume rate-limit budget.
+      // In DMs with chatbot enabled, every message is a chatbot prompt.
+      // In groups, only explicit addressment (@mention or reply to the bot)
+      // may reach the AI layer; ordinary chatter must never consume budget.
+      const isDm = !message.isGroup;
       const mentioned = (message.mentionedJids ?? [])
         .some((jid) => normalizeJid(jid) === normalizeJid(this.botJid));
-      const prompt = stripBotMention(message.text, this.botJid, { mentioned });
-      if ((!isChatbotTrigger(message, this.botJid) && !mentioned) || !prompt) {
+      const prompted = isDm || isChatbotTrigger(message, this.botJid) || mentioned;
+      const prompt = isDm
+        ? message.text
+        : stripBotMention(message.text, this.botJid, { mentioned });
+      if (!prompted || !prompt) {
         return { handled: false, reason: 'no-trigger' };
       }
       const limitKey = `chatbot:${message.chatJid}:${message.senderJid}`;

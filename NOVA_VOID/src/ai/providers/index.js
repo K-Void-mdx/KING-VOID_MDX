@@ -60,6 +60,7 @@ export function registerProviders(router, generation, env) {
     registered.push('openrouter');
   }
 
+  console.error(`[ AI ] Registered providers: ${registered.length ? registered.join(', ') : 'NONE'}`);
   return registered;
 }
 

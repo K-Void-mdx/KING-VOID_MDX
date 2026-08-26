@@ -28,10 +28,9 @@ export function createAICommands({ ai, sessions, memory, limiter }) {
           // quotas alike — the bot never invents an answer either way.
           const known = typeof ai.answerFromKnowledge === 'function' ? ai.answerFromKnowledge(ctx.argsText) : null;
           if (known) return ctx.reply(wa.knowledgeAnswer(known.content));
-          if (!(error instanceof AIProviderError)) {
-            // Real unexpected failure: log safely in Termux, clean card for users.
-            console.error(`[AI] provider error: ${error?.message ?? error}`);
-          }
+          // ALWAYS log the actual error to Termux — including AIProviderError.
+          console.error(`[AI] provider error: ${error?.message ?? error}`);
+          if (error?.cause) console.error(`[AI] caused by: ${error.cause?.message ?? error.cause}`);
           return ctx.reply(wa.aiNotConfigured());
         }
       },

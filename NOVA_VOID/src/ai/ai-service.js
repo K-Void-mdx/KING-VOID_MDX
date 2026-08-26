@@ -1,10 +1,13 @@
 import { findKnowledge } from './knowledge.js';
 
+const DEFAULT_PERSONALITY = `You are NOVA_VOID MDX, a helpful AI assistant on WhatsApp. You are friendly, concise, and direct. Never say you are Claude, GPT, or any other model. Your name is NOVA_VOID MDX. Keep responses short and natural for WhatsApp chat. Use simple formatting that works on WhatsApp.`;
+
 export class AIService {
-  constructor({ router, sessions, memory }) {
+  constructor({ router, sessions, memory, personality = DEFAULT_PERSONALITY }) {
     this.router = router;
     this.sessions = sessions;
     this.memory = memory;
+    this.personality = personality;
   }
 
   /**
@@ -23,7 +26,7 @@ export class AIService {
       ...this.memory.list(userJid, 'bot'),
     ].map((item) => item.content);
     const messages = [
-      ...(systemPrompt ? [{ role: 'system', content: systemPrompt }] : []),
+      { role: 'system', content: systemPrompt || this.personality },
       ...(knowledge.length ? [{ role: 'system', content: `Bot memory:\n${knowledge.join('\n')}` }] : []),
       ...session.messages.map(({ role, content }) => ({ role, content })),
       { role: 'user', content: prompt },

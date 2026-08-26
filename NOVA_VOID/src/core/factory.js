@@ -11,6 +11,7 @@ import { createAICommands } from '../commands/ai.js';
 import { createChatbotCommand } from '../commands/chatbot.js';
 import { createGenerateCommand } from '../commands/generate.js';
 import { createCoreCommands } from '../commands/core.js';
+import { createUpdateCommand } from '../commands/update.js';
 import { DEVELOPER_JID } from '../config/env.js';
 import { registerProviders } from '../ai/providers/index.js';
 
@@ -75,5 +76,6 @@ export function createNovaApplication({
   app.register(createAICommands({ ai, sessions, memory, limiter: app.limiter }));
   app.register(createChatbotCommand({ state: app.chatbot }));
   app.register(createGenerateCommand({ generation }));
+  app.register(createUpdateCommand());
   return { app, router, sessions, memory, ai, generation, chatbot };
 }

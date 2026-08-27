@@ -399,6 +399,24 @@ export async function startNovaVoid() {
         }
         throw new Error('Unsupported media payload');
       },
+      sendButton: async (chatJid, { buttonId, label }) => {
+        // WhatsApp quick-reply interactive message. Tapping the button emits a
+        // nativeFlowResponseMessage back to us with the same button id.
+        return sock.sendMessage(chatJid, {
+          interactiveMessage: {
+            body: { text: 'Tap below to copy the code 👇' },
+            footer: { text: 'NOVA_VOID MDX' },
+            nativeFlowMessage: {
+              buttons: [
+                {
+                  name: 'quick_reply',
+                  buttonParamsJson: JSON.stringify({ display_text: label, id: buttonId }),
+                },
+              ],
+            },
+          },
+        });
+      },
       trace,
       env, // Pass full env for provider registration
     });

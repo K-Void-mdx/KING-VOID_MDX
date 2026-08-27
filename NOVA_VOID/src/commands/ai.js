@@ -10,11 +10,10 @@ export function createAICommands({ ai, sessions, memory, limiter }) {
       aliases: ['ask'],
       category: 'ai',
       usage: '.ai <question>',
+      description: 'Ask NOVA_VOID anything — get an AI answer.',
       async execute(ctx) {
         if (!ctx.argsText) {
-          return ctx.reply(
-            ['⚠️ *_USAGE_*', '', '`.ai <question>`', '', wa.footer()].join('\n')
-          );
+          return ctx.reply(['⚠️ *_USAGE_*', '', '`.' + wa.smallCaps('ai') + ' <question>`', '', wa.footer()].join('\n'));
         }
         const limitKey = `cmd:ai:${ctx.senderJid}`;
         if (limiter && !limiter.allow(limitKey)) {
@@ -25,13 +24,14 @@ export function createAICommands({ ai, sessions, memory, limiter }) {
         const send = ctx.replyTo && ctx.message?.isGroup ? ctx.replyTo : ctx.reply;
         try {
           const answer = await ai.chat({ userJid: ctx.senderJid, prompt: ctx.argsText, scope: ctx.chatJid });
-          // When the answer contains fenced code, ship it as a copyable file
-          // and keep the explanation as a threaded text reply.
-          if (ctx.sendCode) {
-            const { explanation, code, fileName } = splitCodeBlocks(answer);
-            if (code) {
+          // When the answer contains fenced code: explanation text first, then
+          // a COPY CODE button (or a code file when buttons aren't available).
+          const { explanation, code, fileName } = splitCodeBlocks(answer);
+          if (code) {
+            const shipCode = ctx.sendCopyButton ?? ctx.sendCode;
+            if (shipCode) {
               await send(formatWhatsAppCode(explanation) || 'Here is your code:');
-              await ctx.sendCode({ code, fileName });
+              await shipCode({ code, fileName });
               return null;
             }
           }
@@ -94,6 +94,7 @@ export function createAICommands({ ai, sessions, memory, limiter }) {
       aliases: ['clearhistory'],
       category: 'ai',
       usage: '.clear-h [all]',
+      description: 'Clear your AI session history (owner: all).',
       async execute(ctx) {
         if (ctx.args?.[0] === 'all') {
           if (ctx.role !== 'owner') {
@@ -129,7 +130,7 @@ export function createAICommands({ ai, sessions, memory, limiter }) {
       description: 'Teach NOVA_VOID knowledge every chat can use.',
       async execute(ctx) {
         if (!ctx.argsText) {
-          return ctx.reply(['⚠️ *_USAGE_*', '', '`.train <information>`', '', wa.footer()].join('\n'));
+          return ctx.reply(['⚠️ *_USAGE_*', '', '`.' + wa.smallCaps('train') + ' <information>`', '', wa.footer()].join('\n'));
         }
         memory.add('*', ctx.argsText, { scope: 'global' });
         return ctx.reply(
@@ -160,7 +161,7 @@ export function createAICommands({ ai, sessions, memory, limiter }) {
         const records = memory.listAll('global');
         if (!records.length) {
           return ctx.reply(
-            [wa.header(), '', '🧠 *_KNOWLEDGE BASE EMPTY_*', '', 'Use `.train <information>` to teach the bot.', '', wa.footer()].join('\n')
+            [wa.header(), '', '🧠 *_KNOWLEDGE BASE EMPTY_*', '', 'Use `.' + wa.smallCaps('train') + ' <information>` to teach the bot.', '', wa.footer()].join('\n')
           );
         }
         const lines = records.map((item, index) => `\`${index + 1}.\` ${item.content}`).join('\n');
@@ -179,7 +180,7 @@ export function createAICommands({ ai, sessions, memory, limiter }) {
         const index = Number(ctx.args?.[0]);
         const records = memory.listAll('global');
         if (!Number.isInteger(index) || index < 1 || index > records.length) {
-          return ctx.reply(['⚠️ *_USAGE_*', '', '`.train-remove <number>`', '', wa.footer()].join('\n'));
+          return ctx.reply(['⚠️ *_USAGE_*', '', '`.' + wa.smallCaps('train-remove') + ' <number>`', '', wa.footer()].join('\n'));
         }
         memory.remove('*', records[index - 1].id, 'global');
         return ctx.reply([wa.header(), '', '🧠 *_MEMORY REMOVED_*', '', `\`#${index}\` deleted.`, '', wa.footer()].join('\n'));

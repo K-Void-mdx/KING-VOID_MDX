@@ -1,7 +1,6 @@
 import { listCommands } from '../core/commands/registry.js';
 import { getProviderStatus } from '../ai/providers/index.js';
 import * as wa from '../ui/wa-style.js';
-
 /**
  * Tier-1 core commands: ping, status, menu, providers.
  */
@@ -77,8 +76,9 @@ export function createCoreCommands({ app, botName = 'NOVA_VOID MDX', prefix = '.
         for (const [category, items] of [...byCategory.entries()].sort()) {
           sections.push(`${icons[category] ?? '🛠️'} *_${category.toUpperCase()}_*`);
           for (const item of items) {
-            const usage = item.usage ? ` ${item.usage.replace(/^\.\S*/, '')}` : '';
-            sections.push(`\`${prefix}${item.name}${usage}\``);
+            const arg = item.usage ? item.usage.replace(/^\.\S*/, '').trim() : '';
+            const desc = item.description ? ` : ${item.description}` : '';
+            sections.push(`\`${prefix}${wa.smallCaps(item.name)}${arg ? ` ${arg}` : ''}\`${desc}`);
           }
           sections.push('');
         }

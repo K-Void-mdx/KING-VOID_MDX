@@ -1,4 +1,6 @@
 // ANSI helpers — zero dependencies.
+import { smallCaps as sc } from './wa-style.js';
+
 const C = {
   reset: '\x1b[0m',
   bright: '\x1b[1m',
@@ -191,9 +193,9 @@ export function onlineMessage(botName = 'NOVA_VOID MDX', prefix = '.', commands 
     '└──────────',
     '',
     '💬 *Try:*',
-    `\`${prefix}ping\``,
-    `\`${prefix}menu\``,
-    `\`${prefix}status\``,
+    `\`${prefix}${sc('ping')}\``,
+    `\`${prefix}${sc('menu')}\``,
+    `\`${prefix}${sc('status')}\``,
     '',
     `⚡ *_${botName}_* is ready.`,
   ].join('\n');

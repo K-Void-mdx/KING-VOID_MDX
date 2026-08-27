@@ -1,4 +1,5 @@
 import * as wa from '../ui/wa-style.js';
+const sc = wa.smallCaps;
 
 const NOT_CONFIGURED = /no .*provider is configured/i;
 
@@ -11,7 +12,7 @@ export function createGenerateCommand({ generation }) {
     description: 'Generate an image when a provider is configured.',
     async execute(ctx) {
       if (!ctx.argsText) {
-        return ctx.reply(['⚠️ *_USAGE_*', '', '`.generate <image prompt>`', '', wa.footer()].join('\n'));
+        return ctx.reply(['⚠️ *_USAGE_*', '', '`.' + sc('generate') + ' <image prompt>`', '', wa.footer()].join('\n'));
       }
       try {
         const result = await generation.image(ctx.argsText);

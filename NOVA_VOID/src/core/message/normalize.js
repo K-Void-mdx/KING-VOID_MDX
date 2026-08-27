@@ -19,6 +19,26 @@ export function unwrapMessage(message) {
   return { message: current, wrapped };
 }
 
+/**
+ * Extracts the button id pressed inside a WhatsApp quick-reply interactive
+ * response. Baileys delivers presses as interactiveResponseMessage with a
+ * nativeFlowResponseMessage whose paramsJson carries the button id.
+ */
+function extractButtonId(message) {
+  const flow = message?.interactiveResponseMessage?.nativeFlowResponseMessage;
+  if (!flow) return null;
+  if (flow.paramsJson) {
+    try {
+      const params = JSON.parse(flow.paramsJson);
+      if (typeof params.id === 'string' && params.id) return params.id;
+    } catch {
+      /* fall through to name-based fallback */
+    }
+  }
+  if (typeof flow.name === 'string' && flow.name) return flow.name;
+  return null;
+}
+
 export function normalizeMessage(raw = {}, { botJid = '' } = {}) {
   const envelope = raw.message ?? raw;
   const key = raw.key ?? envelope.key ?? {};
@@ -50,6 +70,7 @@ export function normalizeMessage(raw = {}, { botJid = '' } = {}) {
     isProtocol: Boolean(message?.protocolMessage || message?.reactionMessage || message?.senderKeyDistributionMessage),
     isEphemeral: Boolean(envelope?.ephemeralMessage),
     isFromBot: Boolean(key.fromMe ?? raw.fromMe),
+    buttonId: extractButtonId(message),
     botJid,
     raw,
   };

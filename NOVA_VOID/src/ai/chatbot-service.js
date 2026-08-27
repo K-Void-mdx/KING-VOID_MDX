@@ -8,9 +8,10 @@ import * as wa from '../ui/wa-style.js';
  * Handles one potential chatbot turn.
  * Returns true only when a reply was sent.
  * `force` is set for DMs where every message is a prompt (no mention needed).
- * `sendCode` sends code to the chat as a document (.py/.txt) for easy copying.
+ * `sendCopyButton` sends an interactive "COPY CODE" button; falling back to
+ * `sendCode` (a direct .py/.txt document) when buttons aren't available.
  */
-export async function handleChatbotMessage({ message, botJid, botLid, enabled, ai, reply, sendCode, force = false }) {
+export async function handleChatbotMessage({ message, botJid, botLid, enabled, ai, reply, sendCode, sendCopyButton, force = false }) {
   if (!enabled || message.isFromBot) return false;
   if (!force && !isChatbotTrigger(message, botJid, botLid)) return false;
 
@@ -43,15 +44,17 @@ export async function handleChatbotMessage({ message, botJid, botLid, enabled, a
     return true;
   }
 
-  // Prefer a copyable code file when the answer contains fenced code.
-  if (sendCode) {
+  // Two-message flow for code answers: explanation message, then a COPY CODE
+  // button whose press ships the code as a copyable file.
+  const shipCode = sendCopyButton ?? sendCode;
+  if (shipCode) {
     const { explanation, code, fileName } = splitCodeBlocks(answer);
     if (code) {
       const caption = explanation
         ? formatWhatsAppCode(explanation)
         : 'Here is your code — tap to copy.';
       await reply(caption);
-      await sendCode({ code, fileName });
+      await shipCode({ code, fileName });
       return true;
     }
   }

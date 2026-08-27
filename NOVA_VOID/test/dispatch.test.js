@@ -299,6 +299,116 @@ test('chatbot sends code answers as a copyable document file', async () => {
   assert.ok(/import random/.test(sentCode[0].code), 'document carries the code body');
 });
 
+test('chatbot sends a COPY CODE button instead of direct file when available', async () => {
+  const fence = '```';
+  const sent = [];
+  const sentButtons = [];
+  const fakeAi = {
+    chat: async () => `Here's a dice roller:\n\n${fence}python\nimport random\nprint("hi")\n${fence}\n\nEnjoy!`,
+    answerFromKnowledge: () => null,
+  };
+  const message = {
+    senderJid: USER,
+    chatJid: CHAT,
+    isGroup: true,
+    isFromBot: false,
+    mentionedJids: [BOT],
+    text: '@bot python code please',
+    raw: { key: { id: 'c2', remoteJid: CHAT, participant: USER } },
+  };
+  const replied = await handleChatbotMessage({
+    message,
+    botJid: BOT,
+    botLid: BOT,
+    enabled: true,
+    ai: fakeAi,
+    force: false,
+    reply: async (text) => sent.push(text),
+    sendCopyButton: async (payload) => sentButtons.push(payload),
+    sendCode: async () => { throw new Error('sendCode should not be used when sendCopyButton exists'); },
+  });
+  assert.equal(replied, true);
+  assert.equal(sentButtons.length, 1, 'COPY CODE button sent');
+  assert.equal(sentButtons[0].fileName, 'code.py');
+  assert.match(sentButtons[0].code, /import random/);
+  assert.ok(sent.some((t) => /dice roller/.test(t)), 'explanation still sent as message 1');
+});
+
+test('pressing COPY CODE delivers the code without re-prompting', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'nova-btn-'));
+  const sent = [];
+  const mediaSent = [];
+  let n = 0;
+  let sentButtonId = null;
+  let buttonSent = null;
+  const built = createNovaApplication({
+    botJid: BOT,
+    ownerJids: [OWNER],
+    sudoJids: [SUDO],
+    botName: 'NOVA_VOID MDX',
+    prefixes: ['.'],
+    maxHistory: 5,
+    storage: {
+      chatbotStateFile: join(dir, 'chatbot.json'),
+      sessionsDir: join(dir, 'history'),
+      memoryFile: join(dir, 'memory.json'),
+    },
+    reply: async (chat, payload) => {
+      const id = `S${++n}`;
+      sent.push({ chat, text: payload.text, id });
+      return { key: { id } };
+    },
+    sendMedia: async (chat, media) => {
+      mediaSent.push({ media });
+      return { key: { id: `M${++n}` } };
+    },
+    sendButton: async (chat, payload) => {
+      sentButtonId = payload.buttonId;
+      buttonSent = { chat, payload };
+      return { key: { id: `B${++n}` } };
+    },
+  });
+
+  // A code answer triggers a COPY CODE button and stores its payload.
+  await built.app.sendCopyButton(CHAT, { code: 'console.log("hi")\nconsole.log("yo")', fileName: 'code.js' });
+  assert.ok(sentButtonId && sentButtonId.startsWith('copy_code_'), 'button sent with copy_code_ id');
+  assert.ok(buttonSent, 'button transport used');
+
+  // Now press the button — code must arrive as a document without any AI call.
+  const press = await built.app.handle({
+    key: { id: 'press1', remoteJid: CHAT, participant: USER },
+    message: {
+      interactiveResponseMessage: {
+        nativeFlowResponseMessage: {
+          name: 'quick_reply',
+          paramsJson: JSON.stringify({ id: sentButtonId }),
+          displayText: '📋 COPY CODE',
+        },
+      },
+    },
+  });
+  assert.equal(press.type, 'button');
+  assert.equal(mediaSent.length, 1, 'code delivered as a document after press');
+  assert.equal(mediaSent[0].media.fileName, 'code.js');
+  assert.ok(/console\.log/.test(mediaSent[0].media.buffer.toString('utf8')), 'code body delivered');
+
+  // A second press of the same (consumed) button must not replay the code.
+  const replay = await built.app.handle({
+    key: { id: 'press2', remoteJid: CHAT, participant: USER },
+    message: {
+      interactiveResponseMessage: {
+        nativeFlowResponseMessage: {
+          name: 'quick_reply',
+          paramsJson: JSON.stringify({ id: sentButtonId }),
+          displayText: '📋 COPY CODE',
+        },
+      },
+    },
+  });
+  assert.equal(replay.handled, false, 'expired button press is ignored');
+  assert.equal(mediaSent.length, 1, 'no duplicate delivery');
+});
+
 test('owner training becomes global bot knowledge delivered to providers', async () => {
   const h = harness();
   assert.equal((await h.send('.train The launch code is NOVA-77', USER)).type, 'permission-denied');
@@ -658,8 +768,18 @@ test('usages are clean plain-text cards without orphaned box connectors', async 
   const h = harness();
   await h.send('.ai', USER);
   assert.match(h.sent.at(-1).text, /USAGE/);
-  assert.match(h.sent.at(-1).text, /\.ai <question>/);
+  assert.match(h.sent.at(-1).text, /\.ᴀɪ <question>/);
   assert.doesNotMatch(h.sent.at(-1).text, /├ \*Command/);
+});
+
+test('.menu lists commands in WhatsApp small-caps', async () => {
+  const h = harness();
+  await h.send('.menu', USER);
+  const text = h.sent.at(-1).text;
+  assert.match(text, /ᴍᴇɴᴜ|MENU/);
+  assert.match(text, /`\.ᴘɪɴɢ`/);
+  assert.match(text, /`\.ᴀɪ/);
+  assert.doesNotMatch(text, /`\.ping`/);
 });
 
 // ─── Architecture separations: owner authority vs linked pairing account ────

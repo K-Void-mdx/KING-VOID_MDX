@@ -25,6 +25,7 @@ export class NovaApplication {
     memory,
     reply,
     sendMedia,
+    sendButton,
     send,
     chatbot,
     limiter,
@@ -56,6 +57,12 @@ export class NovaApplication {
           return sent;
         }
       : undefined;
+    // Interactive quick-reply transport for the COPY CODE button. Falls back
+    // to sending the code file directly when the transport is unavailable.
+    this.transportSendButton = typeof sendButton === 'function' ? sendButton : undefined;
+    // Pending COPY CODE button payloads, keyed by button id so that a press
+    // can be matched back to its code. Bounded and time-expiring.
+    this.codeStore = new Map();
     this.chatbot = chatbot ?? new ChatbotState();
     this.limiter = limiter ?? new RateLimiter({ windowMs: 15_000, max: 4 });
     this.prefixes = Array.isArray(prefixes) && prefixes.length ? prefixes : ['.'];
@@ -116,6 +123,67 @@ export class NovaApplication {
     return null;
   }
 
+  static get CODE_BUTTON_TTL() {
+    return 10 * 60 * 1000; // 10 minutes
+  }
+
+  static get CODE_BUTTON_MAX() {
+    return 100;
+  }
+
+  /** Drops expired/overflow button payloads so the store stays bounded. */
+  expireCodeStore(now = Date.now()) {
+    if (this.codeStore.size > 0) {
+      for (const [id, entry] of this.codeStore) {
+        if (now - entry.createdAt > NovaApplication.CODE_BUTTON_TTL) this.codeStore.delete(id);
+      }
+    }
+    while (this.codeStore.size > NovaApplication.CODE_BUTTON_MAX) {
+      const oldest = this.codeStore.keys().next().value;
+      this.codeStore.delete(oldest);
+    }
+  }
+
+  /**
+   * Sends a WhatsApp quick-reply button "📋 COPY CODE". The pressed response
+   * carries a unique button id; handleButtonPress matches it back to the code
+   * and ships the code as a copyable file/code block. If interactive buttons
+   * aren't available, immediately send the code file instead so no sender is
+   * left without their code.
+   */
+  async sendCopyButton(chatJid, { code, fileName } = {}) {
+    if (!code) return;
+    const buttonId = `copy_code_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 7)}`;
+    this.codeStore.set(buttonId, { code, fileName, chatJid, createdAt: Date.now() });
+    this.expireCodeStore();
+    if (this.transportSendButton) {
+      try {
+        const sent = await this.transportSendButton(chatJid, { buttonId, label: '📋 COPY CODE' });
+        this.trackOutbound(sent);
+        return sent;
+      } catch (error) {
+        console.error(`[SENDCOPY] button failed, sending file instead: ${error?.message ?? error}`);
+      }
+    }
+    this.codeStore.delete(buttonId);
+    return this.sendCode(chatJid, { code, fileName });
+  }
+
+  /**
+   * Handles a COPY CODE button press: looks up the pending code by button id
+   * and sends it as a copyable file. Returns true when a code was delivered.
+   */
+  async handleButtonPress(message) {
+    const entry = this.codeStore.get(message.buttonId);
+    if (!entry) return false;
+    this.codeStore.delete(message.buttonId);
+    await this.sendCode(entry.chatJid ?? message.chatJid, {
+      code: entry.code,
+      fileName: entry.fileName,
+    });
+    return true;
+  }
+
   trackOutbound(sent) {
     try {
       const id = sent?.key?.id;
@@ -165,7 +233,14 @@ export class NovaApplication {
       const oldest = this.seenIds.values().next().value;
       this.seenIds.delete(oldest);
     }
-    if (!message.text) return { handled: false, reason: 'no-text' };
+    if (!message.text) {
+      // Interactive button presses arrive with no conversation text, so handle
+      // them strictly before the no-text gate.
+      if (message.buttonId && (await this.handleButtonPress(message))) {
+        return { handled: true, type: 'button' };
+      }
+      return { handled: false, reason: 'no-text' };
+    }
     this.trace('message', message);
 
     const role = resolveRole({
@@ -201,6 +276,7 @@ export class NovaApplication {
           replyTo: (text) => this.replyTo(message, text),
           sendMedia: this.sendMedia ? (media) => this.sendMedia(message.chatJid, media) : undefined,
           sendCode: (payload) => this.sendCode(message.chatJid, payload),
+          sendCopyButton: (payload) => this.sendCopyButton(message.chatJid, payload),
         });
         this.trace('response', { command: parsed.name });
       } catch (error) {
@@ -250,6 +326,8 @@ export class NovaApplication {
         reply: (text) => (message.isGroup ? this.replyTo(message, text) : this.reply(message.chatJid, text)),
         // Code answers go out as copyable .py/.txt documents.
         sendCode: (payload) => this.sendCode(message.chatJid, payload),
+        // Preferred now: interactive COPY CODE button (on press ships the file).
+        sendCopyButton: (payload) => this.sendCopyButton(message.chatJid, payload),
       });
       if (replied) return { handled: true, type: 'chatbot' };
     }

@@ -10,7 +10,7 @@ export function createChatbotCommand({ state }) {
     async execute(ctx) {
       const mode = String(ctx.args?.[0] ?? '').toLowerCase();
       if (!['on', 'off'].includes(mode)) {
-        return ctx.reply(['⚠️ *_USAGE_*', '', '`.chatbot on|off`', '', wa.footer()].join('\n'));
+        return ctx.reply(['⚠️ *_USAGE_*', '', '`.' + wa.smallCaps('chatbot') + ' on|off`', '', wa.footer()].join('\n'));
       }
       state.setGlobal(mode === 'on');
       if (mode === 'on') {

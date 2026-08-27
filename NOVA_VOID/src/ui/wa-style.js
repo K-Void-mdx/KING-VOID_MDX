@@ -5,6 +5,17 @@
 
 export const BOT = 'NOVA_VOID MDX';
 
+const SMALL_CAPS = {
+  a: 'ᴀ', b: 'ʙ', c: 'ᴄ', d: 'ᴅ', e: 'ᴇ', f: 'ꜰ', g: 'ɢ', h: 'ʜ', i: 'ɪ',
+  j: 'ᴊ', k: 'ᴋ', l: 'ʟ', m: 'ᴍ', n: 'ɴ', o: 'ᴏ', p: 'ᴘ', q: 'ǫ', r: 'ʀ',
+  s: 'ꜱ', t: 'ᴛ', u: 'ᴜ', v: 'ᴠ', w: 'ᴡ', x: 'x', y: 'ʏ', z: 'ᴢ',
+};
+
+/** Converts ascii text to Unicode small-caps (whatsapp-friendly). */
+export function smallCaps(text = '') {
+  return String(text).replace(/[a-z]/gi, (ch) => SMALL_CAPS[ch.toLowerCase()] ?? ch);
+}
+
 /** ╔═══…╗ / ╚═══…╝ header block with the brand title. */
 export function header(title = BOT) {
   return [
@@ -40,7 +51,7 @@ export function accessDenied(command, requiredRole = 'OWNER') {
     `⚠️ *_ACCESS RESTRICTED_*`,
     '',
     'You do not have permission to use:',
-    `\`.${command}\``,
+    `\`.${smallCaps(command)}\``,
     '',
     row('Required Role', requiredRole.toUpperCase()),
   ].join('\n');
@@ -51,7 +62,7 @@ export function commandError(command) {
   return [
     `🛠️ *_COMMAND ERROR_*`,
     '',
-    `\`.${command}\` could not be completed.`,
+    `\`.${smallCaps(command)}\` could not be completed.`,
     'Please try again in a moment.',
   ].join('\n');
 }
@@ -64,7 +75,7 @@ export function aiNotConfigured() {
     'No external AI provider is connected yet.',
     '',
     'You can still use the offline knowledge system:',
-    '`.train <information>`',
+    `\`.${smallCaps('train')} <information>\``,
     '',
     footer(),
   ].join('\n');

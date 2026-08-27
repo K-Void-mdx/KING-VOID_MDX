@@ -9,6 +9,7 @@ import {
 } from '../src/core/connection-state.js';
 import { normalizePhone, maskPhone } from '../src/core/phone.js';
 import * as ui from '../src/ui/banner.js';
+import { smallCaps } from '../src/ui/wa-style.js';
 
 // ---- phone normalization ----
 
@@ -116,9 +117,20 @@ test('online message is branded, honest, and lists quick-start commands', () => 
   assert.match(msg, /Status.*: `ONLINE`/);
   assert.match(msg, /Prefix.*: `\.`/);
   assert.doesNotMatch(msg, /AI (is )?(configured|connected)/i);
-  for (const cmd of ['.ping', '.menu', '.status']) {
+  for (const cmd of ['.ᴘɪɴɢ', '.ᴍᴇɴᴜ', '.ꜱᴛᴀᴛᴜꜱ']) {
     assert.ok(msg.includes(`\`${cmd}\``), `missing ${cmd}`);
   }
+});
+
+test('smallCaps converts command names to WhatsApp small-caps', () => {
+  assert.equal(smallCaps('ping'), 'ᴘɪɴɢ');
+  assert.equal(smallCaps('menu'), 'ᴍᴇɴᴜ');
+  assert.equal(smallCaps('status'), 'ꜱᴛᴀᴛᴜꜱ');
+  assert.equal(smallCaps('ai'), 'ᴀɪ');
+  assert.equal(smallCaps('generate'), 'ɢᴇɴᴇʀᴀᴛᴇ');
+  assert.equal(smallCaps('history'), 'ʜɪꜱᴛᴏʀʏ');
+  assert.equal(smallCaps('clear-h'), 'ᴄʟᴇᴀʀ-ʜ');
+  assert.equal(smallCaps('-'), '-');
 });
 
 // ---- message pipeline regressions (live-test failures) ----
@@ -167,6 +179,33 @@ test('normalize flags protocol/reaction noise', () => {
     message: { protocolMessage: { type: 0 } },
   };
   assert.equal(normalizeMessage(proto).isProtocol, true);
+});
+
+test('normalize extracts the pressed button id from interactive responses', () => {
+  const press = {
+    key: { id: 'D', remoteJid: '1203@g.us', participant: '2348000000002@s.whatsapp.net' },
+    message: {
+      interactiveResponseMessage: {
+        nativeFlowResponseMessage: {
+          name: 'quick_reply',
+          paramsJson: JSON.stringify({ id: 'copy_code_abc123' }),
+          displayText: '📋 COPY CODE',
+        },
+      },
+    },
+  };
+  const msg = normalizeMessage(press);
+  assert.equal(msg.buttonId, 'copy_code_abc123');
+  assert.equal(msg.text, '');
+  assert.equal(msg.isProtocol, false);
+});
+
+test('normalize leaves buttonId null for ordinary text', () => {
+  const normal = {
+    key: { id: 'E', remoteJid: '1203@g.us' },
+    message: { conversation: 'hello bot' },
+  };
+  assert.equal(normalizeMessage(normal).buttonId, null);
 });
 
 test('sendWithRetry succeeds once, retries failures, and throws only after all attempts', async () => {

@@ -1,5 +1,5 @@
 import { AIProviderError } from '../ai/provider.js';
-import { formatWhatsAppCode } from '../ai/format-code.js';
+import { formatWhatsAppCode, splitCodeBlocks } from '../ai/format-code.js';
 import * as wa from '../ui/wa-style.js';
 
 
@@ -24,8 +24,18 @@ export function createAICommands({ ai, sessions, memory, limiter }) {
         // Group: reply threaded to the asker; DM: plain reply.
         const send = ctx.replyTo && ctx.message?.isGroup ? ctx.replyTo : ctx.reply;
         try {
-          const answer = formatWhatsAppCode(await ai.chat({ userJid: ctx.senderJid, prompt: ctx.argsText, scope: ctx.chatJid }));
-          return send(answer);
+          const answer = await ai.chat({ userJid: ctx.senderJid, prompt: ctx.argsText, scope: ctx.chatJid });
+          // When the answer contains fenced code, ship it as a copyable file
+          // and keep the explanation as a threaded text reply.
+          if (ctx.sendCode) {
+            const { explanation, code, fileName } = splitCodeBlocks(answer);
+            if (code) {
+              await send(formatWhatsAppCode(explanation) || 'Here is your code:');
+              await ctx.sendCode({ code, fileName });
+              return null;
+            }
+          }
+          return send(formatWhatsAppCode(answer));
         } catch (error) {
           // Priority chain: real provider → trained knowledge → honest card.
           // Applies to "not configured", provider crashes and exhausted

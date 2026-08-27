@@ -9,6 +9,7 @@ import { RateLimiter } from './rate-limit.js';
 import { normalizeJid } from './permissions/roles.js';
 import { isBroadcastChat } from './jid.js';
 import * as waStyle from '../ui/wa-style.js';
+import { formatWhatsAppCode } from '../ai/format-code.js';
 
 const OUTBOUND_MEMORY = 500;
 const SEEN_MEMORY = 800;
@@ -87,6 +88,32 @@ export class NovaApplication {
       ? message.raw
       : undefined;
     return this.reply(message.chatJid, text, { quoted });
+  }
+
+  /**
+   * Sends code as a copyable document (.py/.txt). Best-effort: silently falls
+   * back to a monospace text reply when the media transport isn't available or
+   * the attachment fails, so a sender still gets their code either way.
+   */
+  async sendCode(chatJid, { code, fileName } = {}) {
+    if (!code) return;
+    const buffer = Buffer.from(String(code), 'utf8');
+    const media = {
+      type: 'document',
+      buffer,
+      fileName: fileName ?? 'code.txt',
+      mimetype: 'text/plain',
+    };
+    if (this.sendMedia) {
+      try {
+        return await this.sendMedia(chatJid, media);
+      } catch (error) {
+        console.error(`[SENDCODE] media failed, falling back to text: ${error?.message ?? error}`);
+      }
+    }
+    // Fallback: plain monospace text block.
+    await this.reply(chatJid, formatWhatsAppCode(code));
+    return null;
   }
 
   trackOutbound(sent) {
@@ -173,6 +200,7 @@ export class NovaApplication {
           reply: (text) => this.reply(message.chatJid, text),
           replyTo: (text) => this.replyTo(message, text),
           sendMedia: this.sendMedia ? (media) => this.sendMedia(message.chatJid, media) : undefined,
+          sendCode: (payload) => this.sendCode(message.chatJid, payload),
         });
         this.trace('response', { command: parsed.name });
       } catch (error) {
@@ -220,6 +248,8 @@ export class NovaApplication {
         // In groups the bot quotes the sender's message, so its reply visibly
         // targets the person who addressed it rather than floating in the chat.
         reply: (text) => (message.isGroup ? this.replyTo(message, text) : this.reply(message.chatJid, text)),
+        // Code answers go out as copyable .py/.txt documents.
+        sendCode: (payload) => this.sendCode(message.chatJid, payload),
       });
       if (replied) return { handled: true, type: 'chatbot' };
     }

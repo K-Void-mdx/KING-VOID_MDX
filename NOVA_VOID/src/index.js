@@ -386,8 +386,18 @@ export async function startNovaVoid() {
           ? sock.sendMessage(chatJid, { text }, { quoted })
           : sock.sendMessage(chatJid, { text }),
       sendMedia: async (chatJid, media) => {
-        if (media.type !== 'image' || !media.buffer) throw new Error('Unsupported media payload');
-        return sock.sendMessage(chatJid, { image: media.buffer, caption: media.caption ?? '' });
+        if (media.type === 'image' && media.buffer) {
+          return sock.sendMessage(chatJid, { image: media.buffer, caption: media.caption ?? '' });
+        }
+        if (media.type === 'document' && media.buffer) {
+          return sock.sendMessage(chatJid, {
+            document: media.buffer,
+            fileName: media.fileName ?? 'code.txt',
+            mimetype: media.mimetype ?? 'text/plain',
+            caption: media.caption ?? '',
+          });
+        }
+        throw new Error('Unsupported media payload');
       },
       trace,
       env, // Pass full env for provider registration

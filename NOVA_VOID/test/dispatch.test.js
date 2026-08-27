@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { createNovaApplication } from '../src/core/factory.js';
+import { handleChatbotMessage } from '../src/ai/chatbot-service.js';
 import { resolveRole } from '../src/core/permissions/roles.js';
 import { registerCommand, getCommand, clearCommands, listCommands } from '../src/core/commands/registry.js';
 import { parseCommand } from '../src/core/commands/parse.js';
@@ -262,6 +263,40 @@ test('.ai command quotes the asker in a group', async () => {
   assert.match(last.text, /AI NOT CONFIGURED/);
   assert.ok(last.quoted, '.ai in a group must quote the asker');
   assert.equal(last.quoted.key.participant, USER);
+});
+
+test('chatbot sends code answers as a copyable document file', async () => {
+  const fence = '```';
+  const sent = [];
+  const sentCode = [];
+  const fakeAi = {
+    chat: async () => `Here's a quick script:\n\n${fence}python\nimport random\nprint(f"🎲 {random.randint(1,6)}")\n${fence}\n\nEnjoy!`,
+    answerFromKnowledge: () => null,
+  };
+  const message = {
+    senderJid: USER,
+    chatJid: CHAT,
+    isGroup: true,
+    isFromBot: false,
+    mentionedJids: [BOT],
+    text: '@bot give me python code',
+    raw: { key: { id: 'c1', remoteJid: CHAT, participant: USER } },
+  };
+  const replied = await handleChatbotMessage({
+    message,
+    botJid: BOT,
+    botLid: BOT,
+    enabled: true,
+    ai: fakeAi,
+    force: false,
+    reply: async (text) => sent.push(text),
+    sendCode: async (payload) => sentCode.push(payload),
+  });
+  assert.equal(replied, true);
+  assert.ok(sent.some((t) => /Here's a quick script/.test(t)), 'explanation sent as text');
+  assert.equal(sentCode.length, 1, 'code sent as a document');
+  assert.equal(sentCode[0].fileName, 'code.py');
+  assert.ok(/import random/.test(sentCode[0].code), 'document carries the code body');
 });
 
 test('owner training becomes global bot knowledge delivered to providers', async () => {

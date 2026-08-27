@@ -37,6 +37,10 @@ export class OpenAICompatibleProvider extends AIProvider {
           messages,
           max_tokens: 2048,
           temperature: 0.7,
+          // Some endpoints (e.g. certain Groq/Zen sessions) reject requests
+          // without a user id. If a jid is available, send it; otherwise the
+          // endpoint falls back to a default anonymous session.
+          ...(userJid ? { user: userJid } : {}),
         }),
         signal: controller.signal,
       });

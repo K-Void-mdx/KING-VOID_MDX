@@ -7,12 +7,14 @@ import * as wa from '../ui/wa-style.js';
  * Handles one potential chatbot turn.
  * Returns true only when a reply was sent.
  */
-export async function handleChatbotMessage({ message, botJid, enabled, ai, reply }) {
+export async function handleChatbotMessage({ message, botJid, botLid, enabled, ai, reply }) {
   if (!enabled || message.isFromBot) return false;
-  if (!isChatbotTrigger(message, botJid)) return false;
+  if (!isChatbotTrigger(message, botJid, botLid)) return false;
 
-  const mentioned = (message.mentionedJids ?? [])
-    .some((jid) => String(jid).toLowerCase().replace(/:\d+(?=@)/, '') === String(botJid).toLowerCase().replace(/:\d+(?=@)/, ''));
+  const mentioned = (message.mentionedJids ?? []).some((jid) => {
+    const norm = String(jid).toLowerCase().replace(/:\d+(?=@)/, '');
+    return [botJid, botLid].some((id) => id && norm === String(id).toLowerCase().replace(/:\d+(?=@)/, ''));
+  });
   const prompt = stripBotMention(message.text, botJid, { mentioned });
   if (!prompt) return false;
 

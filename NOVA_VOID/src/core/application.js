@@ -177,8 +177,9 @@ export class NovaApplication {
       // may reach the AI layer; ordinary chatter must never consume budget.
       const isDm = !message.isGroup;
       const mentioned = (message.mentionedJids ?? [])
-        .some((jid) => normalizeJid(jid) === normalizeJid(this.botJid));
-      const prompted = isDm || isChatbotTrigger(message, this.botJid) || mentioned;
+        .some((jid) => [this.botJid, this.botLid]
+          .some((id) => id && normalizeJid(jid) === normalizeJid(id)));
+      const prompted = isDm || isChatbotTrigger(message, this.botJid, this.botLid) || mentioned;
       const prompt = isDm
         ? message.text
         : stripBotMention(message.text, this.botJid, { mentioned });
@@ -197,6 +198,7 @@ export class NovaApplication {
       const replied = await handleChatbotMessage({
         message,
         botJid: this.botJid,
+        botLid: this.botLid,
         enabled: true,
         ai: this.ai,
         reply: (text) => this.reply(message.chatJid, text),

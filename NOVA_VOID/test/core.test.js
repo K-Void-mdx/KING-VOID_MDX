@@ -42,6 +42,27 @@ test('does not trigger chatbot on ordinary messages', () => {
   assert.equal(isChatbotTrigger(message, 'bot@s.whatsapp.net'), false);
 });
 
+test('recognizes bot addressed by its Alternate LID (…@lid) in groups', () => {
+  const bot = '2347046855205@s.whatsapp.net';
+  const lid = '148417661669464@lid';
+  const message = normalizeMessage({
+    key: { id: 'lid1', remoteJid: '1203@g.us', participant: '455555@s.whatsapp.net' },
+    message: { extendedTextMessage: { text: '@nova hey', contextInfo: { mentionedJid: [lid] } } },
+  }, { botJid: bot });
+  assert.equal(message.isGroup, true);
+  assert.equal(isChatbotTrigger(message, bot, lid), true, 'mention via LID should trigger');
+});
+
+test('recognizes bot when quoted participant is its LID', () => {
+  const bot = '2347046855205@s.whatsapp.net';
+  const lid = '148417661669464@lid';
+  const message = normalizeMessage({
+    key: { id: 'lid2', remoteJid: '1203@g.us', participant: '455555@s.whatsapp.net' },
+    message: { extendedTextMessage: { text: 'reply to bot', contextInfo: { participant: lid, stanzaId: '9' } } },
+  }, { botJid: bot });
+  assert.equal(isChatbotTrigger(message, bot, lid), true, 'reply-to-LID should trigger');
+});
+
 test('fromMe DM messages derive senderJid from botJid, not the chat partner', () => {
   const bot = '2347046855205@s.whatsapp.net';
   // fromMe DM with no explicit sender fields — senderJid must be the linked account

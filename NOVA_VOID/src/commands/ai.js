@@ -1,4 +1,5 @@
 import { AIProviderError } from '../ai/provider.js';
+import { formatWhatsAppCode } from '../ai/format-code.js';
 import * as wa from '../ui/wa-style.js';
 
 
@@ -20,18 +21,21 @@ export function createAICommands({ ai, sessions, memory, limiter }) {
           const seconds = Math.ceil(limiter.msUntilAllowed(limitKey) / 1000);
           return ctx.reply(wa.rateLimited().replace('COOLDOWN', `${seconds}s`));
         }
+        // Group: reply threaded to the asker; DM: plain reply.
+        const send = ctx.replyTo && ctx.message?.isGroup ? ctx.replyTo : ctx.reply;
         try {
-          return ctx.reply(await ai.chat({ userJid: ctx.senderJid, prompt: ctx.argsText, scope: ctx.chatJid }));
+          const answer = formatWhatsAppCode(await ai.chat({ userJid: ctx.senderJid, prompt: ctx.argsText, scope: ctx.chatJid }));
+          return send(answer);
         } catch (error) {
           // Priority chain: real provider → trained knowledge → honest card.
           // Applies to "not configured", provider crashes and exhausted
           // quotas alike — the bot never invents an answer either way.
           const known = typeof ai.answerFromKnowledge === 'function' ? ai.answerFromKnowledge(ctx.argsText) : null;
-          if (known) return ctx.reply(wa.knowledgeAnswer(known.content));
+          if (known) return send(wa.knowledgeAnswer(known.content));
           // ALWAYS log the actual error to Termux — including AIProviderError.
           console.error(`[AI] provider error: ${error?.message ?? error}`);
           if (error?.cause) console.error(`[AI] caused by: ${error.cause?.message ?? error.cause}`);
-          return ctx.reply(wa.aiNotConfigured());
+          return send(wa.aiNotConfigured());
         }
       },
     },

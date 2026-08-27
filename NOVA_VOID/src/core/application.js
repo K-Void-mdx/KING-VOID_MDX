@@ -70,10 +70,23 @@ export class NovaApplication {
   }
 
   /** Raw send, wrapped with guaranteed outbound tracking. */
-  async reply(chatJid, text) {
-    const sent = await this.transportSend(chatJid, { text });
+  async reply(chatJid, text, { quoted } = {}) {
+    const sent = await this.transportSend(chatJid, { text, quoted });
     this.trackOutbound(sent);
     return sent;
+  }
+
+  /**
+   * Sends text as a threaded reply (quote) to an inbound WhatsApp message.
+   * The `quoted` payload is the original WebMessageInfo, so WhatsApp renders
+   * the bot's reply attached to the person who addressed it — making clear
+   * exactly who the bot is talking to in a group.
+   */
+  async replyTo(message, text) {
+    const quoted = message?.raw && (message.raw.key || message.raw.message)
+      ? message.raw
+      : undefined;
+    return this.reply(message.chatJid, text, { quoted });
   }
 
   trackOutbound(sent) {
@@ -158,6 +171,7 @@ export class NovaApplication {
           argsText: parsed.text,
           role,
           reply: (text) => this.reply(message.chatJid, text),
+          replyTo: (text) => this.replyTo(message, text),
           sendMedia: this.sendMedia ? (media) => this.sendMedia(message.chatJid, media) : undefined,
         });
         this.trace('response', { command: parsed.name });
@@ -201,7 +215,11 @@ export class NovaApplication {
         botLid: this.botLid,
         enabled: true,
         ai: this.ai,
-        reply: (text) => this.reply(message.chatJid, text),
+        // DMs: every inbound message is a prompt (no mention required).
+        force: !message.isGroup,
+        // In groups the bot quotes the sender's message, so its reply visibly
+        // targets the person who addressed it rather than floating in the chat.
+        reply: (text) => (message.isGroup ? this.replyTo(message, text) : this.reply(message.chatJid, text)),
       });
       if (replied) return { handled: true, type: 'chatbot' };
     }

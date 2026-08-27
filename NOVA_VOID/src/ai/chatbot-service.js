@@ -1,15 +1,17 @@
 import { isChatbotTrigger, stripBotMention } from './chatbot.js';
 import { AIProviderError } from './provider.js';
+import { formatWhatsAppCode } from './format-code.js';
 import * as wa from '../ui/wa-style.js';
 
 
 /**
  * Handles one potential chatbot turn.
  * Returns true only when a reply was sent.
+ * `force` is set for DMs where every message is a prompt (no mention needed).
  */
-export async function handleChatbotMessage({ message, botJid, botLid, enabled, ai, reply }) {
+export async function handleChatbotMessage({ message, botJid, botLid, enabled, ai, reply, force = false }) {
   if (!enabled || message.isFromBot) return false;
-  if (!isChatbotTrigger(message, botJid, botLid)) return false;
+  if (!force && !isChatbotTrigger(message, botJid, botLid)) return false;
 
   const mentioned = (message.mentionedJids ?? []).some((jid) => {
     const norm = String(jid).toLowerCase().replace(/:\d+(?=@)/, '');
@@ -40,6 +42,6 @@ export async function handleChatbotMessage({ message, botJid, botLid, enabled, a
     return true;
   }
 
-  await reply(answer);
+  await reply(formatWhatsAppCode(answer));
   return true;
 }

@@ -37,7 +37,7 @@ function harness({ limiter, prefixes = ['.'] } = {}) {
     // application can register outbound ids for echo suppression.
     reply: async (chat, payload) => {
       const id = `SENT${++sendCounter}`;
-      sent.push({ chat, text: payload.text, id });
+      sent.push({ chat, text: payload.text, quoted: payload.quoted, id });
       return { key: { id } };
     },
   });
@@ -165,6 +165,28 @@ test('replying to a bot message triggers the chatbot too', async () => {
   assert.match(h.sent.at(-1).text, /No external AI provider/);
 });
 
+test('group chatbot reply quotes the sender message (threaded)', async () => {
+  const h = harness();
+  await h.send('.chatbot on', OWNER);
+  const raw = mention('@bot what is two plus two');
+  await h.app.handle(raw);
+  const last = h.sent.at(-1);
+  assert.equal(last.type, undefined);
+  assert.ok(last.quoted, 'group chatbot reply must carry a quoted payload');
+  assert.equal(last.quoted.key.participant, USER, 'quote targets the sender');
+});
+
+test('group replies do NOT quote in DMs (plain reply)', async () => {
+  const h = harness();
+  await h.send('.chatbot on', OWNER);
+  const dm = await h.app.handle({
+    key: { id: 'dm1', remoteJid: OWNER, participant: OWNER },
+    message: { conversation: 'hey bot' },
+  });
+  assert.equal(dm.type, 'chatbot');
+  assert.equal(h.sent.at(-1).quoted, undefined, 'DM replies are not quoted');
+});
+
 test('bare mentions without text stay silent and cost no rate budget', async () => {
   const h = harness({ limiter: new RateLimiter({ windowMs: 60_000, max: 1 }) });
   await h.send('.chatbot on', OWNER);
@@ -227,6 +249,19 @@ test('unmatched offline questions honestly name the bot and its limits', async (
   assert.equal(result.type, 'chatbot');
   assert.match(h.sent.at(-1).text, /NOVA_VOID MDX/);
   assert.match(h.sent.at(-1).text, /No external AI provider/);
+});
+
+test('.ai command quotes the asker in a group', async () => {
+  const h = harness();
+  const raw = {
+    key: { id: String(Math.random()).slice(2), remoteJid: CHAT, participant: USER },
+    message: { conversation: '.ai what is love' },
+  };
+  await h.app.handle(raw);
+  const last = h.sent.at(-1);
+  assert.match(last.text, /AI NOT CONFIGURED/);
+  assert.ok(last.quoted, '.ai in a group must quote the asker');
+  assert.equal(last.quoted.key.participant, USER);
 });
 
 test('owner training becomes global bot knowledge delivered to providers', async () => {

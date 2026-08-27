@@ -381,7 +381,10 @@ export async function startNovaVoid() {
       // Raw transports only — NovaApplication owns echo tracking internally,
       // so a bookkeeping failure can never turn a successful reply into a
       // "command failed" report.
-      reply: (chatJid, { text }) => sock.sendMessage(chatJid, { text }),
+      reply: (chatJid, { text, quoted }) =>
+        quoted
+          ? sock.sendMessage(chatJid, { text }, { quoted })
+          : sock.sendMessage(chatJid, { text }),
       sendMedia: async (chatJid, media) => {
         if (media.type !== 'image' || !media.buffer) throw new Error('Unsupported media payload');
         return sock.sendMessage(chatJid, { image: media.buffer, caption: media.caption ?? '' });

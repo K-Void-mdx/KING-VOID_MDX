@@ -25,6 +25,7 @@ import { loadWaVersion } from './core/version-cache.js';
 import { bareJid, maskJid, ownerNotificationTarget } from './core/jid.js';
 import { sendWithRetry } from './core/send-retry.js';
 import { installLogGuard } from './core/log-guard.js';
+import { createLoggerHook } from './core/session-healer.js';
 import { createOnlineGate } from './core/online-gate.js';
 import * as ui from './ui/banner.js';
 
@@ -37,6 +38,13 @@ assertValidEnv();
 // Baileys internals stay quiet to save battery/data on Termux; lifecycle
 // messaging is handled by our own human-readable logs.
 const baileysLogger = pino({ level: env.nodeEnv === 'production' ? 'error' : 'warn' });
+// Wrap Baileys' logger so persistent "failed to decrypt message" (Bad MAC)
+// reports for a jid auto-purge that contact's stale signal session — restoring
+// delivery of DMs and group @mentions that would otherwise be silently lost.
+const { logger: hookedLogger } = createLoggerHook({
+  logger: baileysLogger,
+  authDir: env.authDir,
+});
 
 const PAIRING_TIMEOUT_MS = 30_000;
 const MAX_NUMBER_PROMPTS = 3;
@@ -458,9 +466,9 @@ export async function startNovaVoid() {
         version: waVersion,
         auth: {
           creds: state.creds,
-          keys: makeCacheableSignalKeyStore(state.keys, baileysLogger),
+          keys: makeCacheableSignalKeyStore(state.keys, hookedLogger),
         },
-        logger: baileysLogger,
+        logger: hookedLogger,
         markOnlineOnConnect: false,
         syncFullHistory: false,
       });

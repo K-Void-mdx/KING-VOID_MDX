@@ -30,7 +30,7 @@ export function registerProviders(router, generation, env) {
       name: 'groq',
       baseUrl: 'https://api.groq.com/openai',
       apiKey: env.groqApiKey,
-      model: 'llama-3.3-70b-versatile',
+      model: 'openai/gpt-oss-120b',
     });
     router.register(groq);
     registered.push('groq');
@@ -42,7 +42,7 @@ export function registerProviders(router, generation, env) {
       name: 'opencode-zen',
       baseUrl: 'https://opencode.ai/zen/v1',
       apiKey: env.openCodeApiKey,
-      model: 'mimo-v2.5-free', // Free model
+      model: 'hy3-free', // Free model
     });
     router.register(zen);
     registered.push('opencode-zen');
@@ -54,7 +54,7 @@ export function registerProviders(router, generation, env) {
       name: 'openrouter',
       baseUrl: 'https://openrouter.ai/api/v1',
       apiKey: env.openRouterApiKey,
-      model: 'meta-llama/llama-3.3-70b-instruct:free',
+      model: 'openrouter/free', // Auto-routes to an available free model
     });
     router.register(openrouter);
     registered.push('openrouter');

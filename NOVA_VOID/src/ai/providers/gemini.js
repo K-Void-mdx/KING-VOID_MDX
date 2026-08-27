@@ -9,7 +9,7 @@ export class GeminiProvider extends AIProvider {
   #model;
   #timeout;
 
-  constructor({ apiKey, model = 'gemini-2.0-flash', timeoutMs = 30_000 }) {
+  constructor({ apiKey, model = 'gemini-3.6-flash', timeoutMs = 30_000 }) {
     super('gemini');
     this.#apiKey = apiKey;
     this.#model = model;
